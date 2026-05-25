@@ -129,23 +129,37 @@ export const App = {
   },
 
   async installApp() {
-    if (!this.deferredPrompt) {
-      // Show instructions if install prompt isn't available
+    if (this.deferredPrompt) {
+      this.deferredPrompt.prompt();
+      const result = await this.deferredPrompt.userChoice;
+      if (result.outcome === 'accepted') {
+        console.log('User accepted PWA install');
+      }
+      this.deferredPrompt = null;
+      const banner = document.getElementById('pwa-install-banner');
+      if (banner) banner.classList.remove('visible');
+    } else {
       this.showInstallInstructions();
-      return;
     }
-    this.deferredPrompt.prompt();
-    const result = await this.deferredPrompt.userChoice;
-    if (result.outcome === 'accepted') {
-      console.log('User accepted PWA install');
-    }
-    this.deferredPrompt = null;
-    const banner = document.getElementById('pwa-install-banner');
-    if (banner) banner.classList.remove('visible');
   },
 
   showInstallInstructions() {
-    Toast.show('Abre Chrome ⋮ → Instalar app, o Safari → Compartir → Agregar a Inicio', 'info', 5000);
+    const userAgent = navigator.userAgent || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+    const isChrome = /Chrome/i.test(userAgent) && !isIOS;
+
+    if (isIOS) {
+      Toast.show('iOS: Safari → Compartir (📤) → Agregar a Pantalla de Inicio', 'info', 6000);
+    } else if (isChrome) {
+      Toast.show('Chrome: abre el menú ⋮ y selecciona "Instalar app" o "Agregar a pantalla de inicio"', 'info', 6000);
+    } else {
+      Toast.show('Abre en Chrome y busca "Instalar app" en el menú ⋮', 'info', 5000);
+    }
+  },
+
+  isPWAInstalled() {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true;
   },
 
   // Quick actions

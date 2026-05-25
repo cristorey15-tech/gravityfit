@@ -132,6 +132,25 @@ export const ProfileScreen = {
         </div>
 
         <div class="settings-group">
+          <div class="settings-group-title">App</div>
+          ${!window.App || !window.App.isPWAInstalled || !window.App.isPWAInstalled() ? `
+          <div class="settings-item" onclick="window.App.installApp()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">📲</span>
+              <span class="settings-item-label">Instalar App en tu Teléfono</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">Instalar</span>
+          </div>` : `
+          <div class="settings-item" style="cursor:default">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">✅</span>
+              <span class="settings-item-label">App Instalada</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-success)">✓ Listo</span>
+          </div>`}
+        </div>
+
+        <div class="settings-group">
           <div class="settings-group-title">General</div>
           <div class="settings-item" onclick="ProfileScreen.editName()">
             <div class="settings-item-left">
