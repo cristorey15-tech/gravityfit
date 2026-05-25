@@ -1,5 +1,4 @@
-# Deploy a Vite PWA to GitHub Pages
-# https://github.com/marketplace/actions/deploy-to-github-pages
+# Deploy a Vite PWA to GitHub Pages — build triggered on push to main
 name: Deploy to GitHub Pages
 
 on:
