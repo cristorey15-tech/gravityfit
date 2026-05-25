@@ -33,12 +33,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build -- --base=${{ steps.pages.outputs.base_path || '/' }}
-
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v4
+
+      - name: Build
+        run: npm run build -- --base=${{ steps.pages.outputs.base_path || '/' }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
