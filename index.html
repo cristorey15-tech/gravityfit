@@ -82,6 +82,19 @@
 
     <!-- Onboarding Overlay -->
     <div class="onboarding-overlay" id="onboarding-overlay"></div>
+
+    <!-- PWA Install Banner -->
+    <div class="pwa-install-banner" id="pwa-install-banner">
+      <div class="pwa-install-content">
+        <div class="pwa-install-icon">🏋️</div>
+        <div class="pwa-install-text">
+          <div class="pwa-install-title">Instala GravityFit</div>
+          <div class="pwa-install-desc">Agrega a tu pantalla de inicio</div>
+        </div>
+        <button class="pwa-install-btn" onclick="App.installApp()">Instalar</button>
+        <button class="pwa-install-close" onclick="this.closest('.pwa-install-banner').classList.remove('visible')">✕</button>
+      </div>
+    </div>
   </div>
 
   <!-- Firebase SDK (Compat) -->

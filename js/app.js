@@ -12,6 +12,7 @@ import { ExercisesScreen } from './screens/exercises.js';
 import { ProfileScreen } from './screens/profile.js';
 
 export const App = {
+  deferredPrompt: null,
   currentScreen: 'home',
   screenOrder: ['home', 'routines', 'workout', 'history', 'profile'],
   screens: {
@@ -53,6 +54,9 @@ export const App = {
     // Navigate to initial screen
     const hash = window.location.hash.replace('#', '') || 'home';
     this.navigate(hash);
+
+    // PWA Install Handler
+    this.setupPWAInstall();
 
     // Listen to hash changes
     window.addEventListener('hashchange', () => {
@@ -100,6 +104,48 @@ export const App = {
 
     // Scroll to top
     window.scrollTo(0, 0);
+  },
+
+  // --- PWA Install ---
+  setupPWAInstall() {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.deferredPrompt = e;
+      const banner = document.getElementById('pwa-install-banner');
+      if (banner) banner.classList.add('visible');
+    });
+
+    window.addEventListener('appinstalled', () => {
+      this.deferredPrompt = null;
+      const banner = document.getElementById('pwa-install-banner');
+      if (banner) banner.classList.remove('visible');
+    });
+
+    // Don't show install banner if already installed as PWA
+    if (window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true) {
+      return;
+    }
+  },
+
+  async installApp() {
+    if (!this.deferredPrompt) {
+      // Show instructions if install prompt isn't available
+      this.showInstallInstructions();
+      return;
+    }
+    this.deferredPrompt.prompt();
+    const result = await this.deferredPrompt.userChoice;
+    if (result.outcome === 'accepted') {
+      console.log('User accepted PWA install');
+    }
+    this.deferredPrompt = null;
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) banner.classList.remove('visible');
+  },
+
+  showInstallInstructions() {
+    Toast.show('Abre Chrome ⋮ → Instalar app, o Safari → Compartir → Agregar a Inicio', 'info', 5000);
   },
 
   // Quick actions
