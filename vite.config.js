@@ -1,9 +1,14 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// The base path is passed via --base CLI flag or BASE_URL env var
+// GitHub Pages sets it dynamically (e.g. /gravityfit/)
+const base = process.env.BASE_URL || '/';
+
 export default defineConfig({
   root: '.',
   publicDir: 'public',
+  base,
   server: {
     host: true,
     port: 5173,
@@ -25,6 +30,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
+      base,
       includeAssets: ['sw.js'],
       manifest: {
         name: 'GravityFit',
@@ -34,15 +40,16 @@ export default defineConfig({
         background_color: '#0D0D0D',
         display: 'standalone',
         orientation: 'portrait',
+        start_url: base,
         icons: [
           {
-            src: 'icons/icon-192.png',
+            src: `${base}icons/icon-192.png`,
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: 'icons/icon-512.png',
+            src: `${base}icons/icon-512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable',

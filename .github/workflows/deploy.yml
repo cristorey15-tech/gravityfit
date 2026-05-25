@@ -38,7 +38,9 @@ jobs:
         uses: actions/configure-pages@v4
 
       - name: Build
-        run: npm run build -- --base=${{ steps.pages.outputs.base_path || '/' }}
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_path || '/' }}
+        run: npm run build -- --base=$BASE_URL
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
