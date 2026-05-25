@@ -3,7 +3,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // The base path is passed via --base CLI flag or BASE_URL env var
 // GitHub Pages sets it dynamically (e.g. /gravityfit/)
-const base = process.env.BASE_URL || '/';
+// Normalize: ensure trailing slash (configure-pages outputs e.g. /gravityfit without slash)
+const base = (process.env.BASE_URL || '/').replace(/\/?$/, '/');
 
 export default defineConfig({
   root: '.',
