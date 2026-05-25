@@ -1,0 +1,31 @@
+{
+  "name": "gravityfit",
+  "private": true,
+  "version": "2.0.0",
+  "description": "GravityFit — Workout Tracker PWA",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/ --fix",
+    "format": "prettier --write src/"
+  },
+  "dependencies": {
+    "firebase": "^12.13.0",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.24.0",
+    "eslint": "^9.24.0",
+    "fake-indexeddb": "^6.2.5",
+    "globals": "^16.0.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.5.3",
+    "vite": "^6.3.5",
+    "vite-plugin-pwa": "^1.0.0",
+    "vitest": "^4.1.7"
+  }
+}

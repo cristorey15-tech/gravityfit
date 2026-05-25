@@ -1,0 +1,87 @@
+[
+  {
+    "id": "pecho",
+    "name": "Pecho",
+    "icon": "🫁"
+  },
+  {
+    "id": "espalda",
+    "name": "Espalda",
+    "icon": "🔙"
+  },
+  {
+    "id": "espalda alta",
+    "name": "Espalda Alta",
+    "icon": "🔙"
+  },
+  {
+    "id": "espalda baja",
+    "name": "Espalda Baja",
+    "icon": "🔙"
+  },
+  {
+    "id": "cuadriceps",
+    "name": "Cuádriceps",
+    "icon": "🦵"
+  },
+  {
+    "id": "femorales",
+    "name": "Femorales",
+    "icon": "🦵"
+  },
+  {
+    "id": "abductores",
+    "name": "Abductores",
+    "icon": "🦵"
+  },
+  {
+    "id": "pantorrillas",
+    "name": "Pantorrillas",
+    "icon": "🦵"
+  },
+  {
+    "id": "gluteos",
+    "name": "Glúteos",
+    "icon": "🍑"
+  },
+  {
+    "id": "hombros",
+    "name": "Hombros",
+    "icon": "💪"
+  },
+  {
+    "id": "biceps",
+    "name": "Bíceps",
+    "icon": "💪"
+  },
+  {
+    "id": "triceps",
+    "name": "Tríceps",
+    "icon": "💪"
+  },
+  {
+    "id": "antebrazos",
+    "name": "Antebrazos",
+    "icon": "💪"
+  },
+  {
+    "id": "core",
+    "name": "Core / Abs",
+    "icon": "🍫"
+  },
+  {
+    "id": "cuello",
+    "name": "Cuello",
+    "icon": "🦒"
+  },
+  {
+    "id": "trapecios",
+    "name": "Trapecios",
+    "icon": "🦍"
+  },
+  {
+    "id": "cardio",
+    "name": "Cardio",
+    "icon": "🏃"
+  }
+]
