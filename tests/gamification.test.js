@@ -51,8 +51,8 @@ describe('Gamification', () => {
       expect(progress3.percentage).toBe(20);
     });
 
-    it('should have 10 badges defined', () => {
-      expect(Gamification.BADGES).toHaveLength(10);
+    it('should have 21 badges defined (10 easy + 6 medium + 5 hard)', () => {
+      expect(Gamification.BADGES).toHaveLength(21);
     });
 
     it('each badge should have required fields', () => {

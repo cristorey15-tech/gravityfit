@@ -15,6 +15,7 @@ export const Gamification = {
 
   // Base de datos de Insignias/Logros
   BADGES: [
+    // --- FÁCILES (ya existentes) ---
     { id: 'first_blood', icon: '🩸', title: 'Primera Sangre', desc: 'Completa tu primer entrenamiento.', reqType: 'workouts', reqTarget: 1 },
     { id: 'dedication_10', icon: '🥉', title: 'Compromiso de Bronce', desc: 'Completa 10 entrenamientos en total.', reqType: 'workouts', reqTarget: 10 },
     { id: 'dedication_50', icon: '🥈', title: 'Guerrero de Plata', desc: 'Completa 50 entrenamientos en total.', reqType: 'workouts', reqTarget: 50 },
@@ -22,9 +23,24 @@ export const Gamification = {
     { id: 'volume_beast', icon: '🦍', title: 'Bestia del Volumen', desc: 'Mueve más de 10,000 kg en un solo entrenamiento.', reqType: 'volume', reqTarget: 10000 },
     { id: 'night_owl', icon: '🦉', title: 'Búho Nocturno', desc: 'Termina un entrenamiento después de medianoche.', reqType: 'time', reqTarget: 'night' },
     { id: 'early_bird', icon: '🐓', title: 'Gallo Madrugador', desc: 'Termina un entrenamiento antes de las 6:00 AM.', reqType: 'time', reqTarget: 'morning' },
-    { id: 'streak_7', icon: '🔥', title: 'Imparable', desc: 'Mantén una racha de entrenamiento de 7 días (basado en meta).', reqType: 'custom' },
+    { id: 'streak_7', icon: '🔥', title: 'Imparable', desc: 'Mantén una racha de entrenamiento de 7 días.', reqType: 'streak', reqTarget: 7 },
     { id: 'pr_hunter', icon: '🎯', title: 'Cazador de Récords', desc: 'Rompe 5 Récords Personales en un solo entrenamiento.', reqType: 'pr', reqTarget: 5 },
-    { id: 'iron_lung', icon: '🫁', title: 'Pulmones de Hierro', desc: 'Registra un entrenamiento de más de 2 horas de duración.', reqType: 'duration', reqTarget: 120 }
+    { id: 'iron_lung', icon: '🫁', title: 'Pulmones de Hierro', desc: 'Registra un entrenamiento de más de 2 horas de duración.', reqType: 'duration', reqTarget: 120 },
+
+    // --- MEDIA DIFICULTAD ---
+    { id: 'dedication_200', icon: '🏅', title: 'Atleta de Hierro', desc: 'Completa 200 entrenamientos en total.', reqType: 'workouts', reqTarget: 200 },
+    { id: 'streak_30', icon: '💪', title: 'Imparable II — 1 Mes', desc: 'Mantén una racha de entrenamiento de 30 días.', reqType: 'streak', reqTarget: 30 },
+    { id: 'volume_mountain', icon: '🏔️', title: 'Montaña de Hierro', desc: 'Acumula 100,000 kg de volumen total levantado en toda tu historia.', reqType: 'cumulativeVolume', reqTarget: 100000 },
+    { id: 'pr_collector', icon: '🎯', title: 'Coleccionista de Récords', desc: 'Rompe 20 Récords Personales en total.', reqType: 'cumulativePRs', reqTarget: 20 },
+    { id: 'night_king', icon: '🌙', title: 'Rey de la Noche', desc: 'Completa 10 entrenamientos después de medianoche.', reqType: 'nightWorkouts', reqTarget: 10 },
+    { id: 'diverse_50', icon: '🌟', title: 'Atleta Versátil', desc: 'Usa 50 ejercicios diferentes en toda tu historia.', reqType: 'uniqueExercises', reqTarget: 50 },
+
+    // --- ALTA DIFICULTAD ---
+    { id: 'dedication_500', icon: '👑', title: 'Leyenda Absoluta', desc: 'Completa 500 entrenamientos en total.', reqType: 'workouts', reqTarget: 500 },
+    { id: 'streak_120', icon: '🔥', title: 'Imparable III — 4 Meses 🔥', desc: 'Mantén una racha de entrenamiento de 120 días (~4 meses entrenando sin faltar).', reqType: 'streak', reqTarget: 120 },
+    { id: 'volume_titan', icon: '🌋', title: 'Titán del Volumen', desc: 'Acumula 500,000 kg de volumen total levantado en toda tu historia.', reqType: 'cumulativeVolume', reqTarget: 500000 },
+    { id: 'pr_legend', icon: '💎', title: 'Leyenda de los Récords', desc: 'Rompe 100 Récords Personales en total.', reqType: 'cumulativePRs', reqTarget: 100 },
+    { id: 'year_warrior', icon: '🗓️', title: 'Guerrero del Año', desc: 'Entrena todos los meses durante 12 meses consecutivos.', reqType: 'yearActive', reqTarget: 12 },
   ],
 
   // Fórmula matemática del nivel: Nivel = raíz cuadrada de (XP / 100) + 1
@@ -63,6 +79,7 @@ export const Gamification = {
     // Inicializar datos RPG si no existen
     if (!user.xp) user.xp = 0;
     if (!user.badges) user.badges = [];
+    if (!user.stats) user.stats = {};
     const initialLevel = this.getLevelFromXP(user.xp);
 
     // 1. Cálculos de XP
@@ -81,17 +98,47 @@ export const Gamification = {
     xpEarned += (totalSets * this.XP_RATES.PER_SET_COMPLETED);
     xpEarned += (prCount * this.XP_RATES.PER_PR_BROKEN);
 
-    // TODO: Racha bonus
-    
+    // Streak bonus XP
+    const streak = Storage.getStreak();
+    if (streak > 1) {
+      xpEarned += streak * this.XP_RATES.STREAK_BONUS;
+    }
+
     user.xp += xpEarned;
     const newLevel = this.getLevelFromXP(user.xp);
     const leveledUp = newLevel > initialLevel;
 
-    // 2. Evaluación de Insignias (Badges)
-    const allWorkouts = Storage.getWorkouts(); // ya incluye el que acaba de terminar
+    // 2. Acumular estadísticas de tracking
+    user.stats.totalPRs = (user.stats.totalPRs || 0) + prCount;
+    
+    // Night workout tracking
     const finishDate = new Date(workoutData.finishedAt);
     const hour = finishDate.getHours();
+    if (hour >= 0 && hour < 4) {
+      user.stats.nightWorkouts = (user.stats.nightWorkouts || 0) + 1;
+    }
+
+    // Unique exercises tracking
+    if (!user.stats.usedExercises) user.stats.usedExercises = [];
+    (workoutData.exercises || []).forEach(ex => {
+      if (ex.exerciseId && !user.stats.usedExercises.includes(ex.exerciseId)) {
+        user.stats.usedExercises.push(ex.exerciseId);
+      }
+    });
+
+    // Months active tracking
+    const monthKey = `${finishDate.getFullYear()}-${finishDate.getMonth()}`;
+    if (!user.stats.activeMonths) user.stats.activeMonths = [];
+    if (!user.stats.activeMonths.includes(monthKey)) {
+      user.stats.activeMonths.push(monthKey);
+    }
+
+    // 3. Evaluación de Insignias (Badges)
+    const allWorkouts = Storage.getWorkouts(); // ya incluye el que acaba de terminar
     const durationMins = workoutData.startedAt ? (finishDate.getTime() - new Date(workoutData.startedAt).getTime()) / 60000 : 0;
+
+    // Pre-calcular stats acumulativos
+    const cumulativeVolume = allWorkouts.reduce((sum, w) => sum + Storage.getTotalVolume(w), 0);
 
     this.BADGES.forEach(badge => {
       // Si ya lo tiene, saltar
@@ -116,7 +163,35 @@ export const Gamification = {
         case 'duration':
           if (durationMins >= badge.reqTarget) unlocked = true;
           break;
-        // Otras validaciones (streaks, etc) se pueden agregar
+        case 'streak':
+          if (streak >= badge.reqTarget) unlocked = true;
+          break;
+        case 'cumulativeVolume':
+          if (cumulativeVolume >= badge.reqTarget) unlocked = true;
+          break;
+        case 'cumulativePRs':
+          if ((user.stats.totalPRs || 0) >= badge.reqTarget) unlocked = true;
+          break;
+        case 'nightWorkouts':
+          if ((user.stats.nightWorkouts || 0) >= badge.reqTarget) unlocked = true;
+          break;
+        case 'uniqueExercises':
+          if ((user.stats.usedExercises || []).length >= badge.reqTarget) unlocked = true;
+          break;
+        case 'yearActive':
+          // Check if user has been active for N+ consecutive months
+          const months = (user.stats.activeMonths || []).sort();
+          if (months.length >= badge.reqTarget) {
+            // Check that the months are consecutive (last N months)
+            const recentMonths = months.slice(-badge.reqTarget);
+            if (recentMonths.length === badge.reqTarget) {
+              const first = recentMonths[0].split('-').map(Number);
+              const last = recentMonths[recentMonths.length - 1].split('-').map(Number);
+              const totalMonths = (last[0] - first[0]) * 12 + (last[1] - first[1]) + 1;
+              if (totalMonths === badge.reqTarget) unlocked = true;
+            }
+          }
+          break;
       }
 
       if (unlocked) {

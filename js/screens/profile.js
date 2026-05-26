@@ -148,6 +148,13 @@ export const ProfileScreen = {
             </div>
             <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-success)">✓ Listo</span>
           </div>`}
+          <div class="settings-item" onclick="ProfileScreen.showQRShare()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">📱</span>
+              <span class="settings-item-label">Compartir App</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">QR</span>
+          </div>
         </div>
 
         <div class="settings-group">
@@ -1160,5 +1167,34 @@ export const ProfileScreen = {
     } catch(e) {
       Toast.show(e.message, 'error');
     }
+  },
+
+  // --- FEATURE: QR Code Share ---
+  showQRShare() {
+    const url = 'https://cristorey15-tech.github.io/gravityfit/';
+    const encodedUrl = encodeURIComponent(url);
+    
+    Modal.show(`
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-size:0.95rem;color:var(--color-text-secondary);margin-bottom:16px">Escanea el código QR o comparte el enlace para que otros instalen GravityFit</div>
+        <div style="background:white;border-radius:16px;padding:16px;display:inline-block;margin-bottom:16px;box-shadow:0 4px 20px rgba(0,0,0,0.15);position:relative">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodedUrl}" 
+               style="width:220px;height:220px;border-radius:8px;display:block" 
+               alt="QR Code GravityFit"
+               onerror="this.style.display='none';this.parentElement.querySelector('.qr-fallback').style.display='flex'">
+          <div class="qr-fallback" style="display:none;width:220px;height:220px;border-radius:8px;background:var(--color-bg-input);align-items:center;justify-content:center;color:var(--color-text-tertiary);font-size:0.85rem">Error al cargar QR</div>
+        </div>
+        <div style="font-size:0.75rem;color:var(--color-text-tertiary);word-break:break-all;margin-bottom:16px;padding:0 16px">
+          ${url}
+        </div>
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-primary flex-1" onclick="navigator.clipboard.writeText('${url}'); Toast.show('Enlace copiado 📋', 'success'); if(navigator.vibrate) navigator.vibrate(10)">📋 Copiar</button>
+          <button class="btn btn-secondary flex-1" onclick="
+            if(navigator.share) { navigator.share({ title: 'GravityFit', text: '¡Descarga GravityFit y empieza a entrenar! 🏋️', url: '${url}' }); } 
+            else { navigator.clipboard.writeText('${url}'); Toast.show('Enlace copiado 📋', 'success'); }
+          ">📤 Compartir</button>
+        </div>
+      </div>
+    `, { title: '📱 Compartir GravityFit' });
   }
 };

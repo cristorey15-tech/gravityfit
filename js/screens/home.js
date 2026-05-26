@@ -51,6 +51,8 @@ export const HomeScreen = {
           </div>
         </div>
 
+        ${this.renderBodyWeightWidget(user)}
+
         <div style="display:flex; gap:12px; margin-bottom:12px;">
           <button class="home-start-btn" style="flex:1; margin-bottom:0;" onclick="App.startEmptyWorkout()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -223,6 +225,56 @@ export const HomeScreen = {
     const days = Math.floor(hours / 24);
     if (days === 1) return 'ayer';
     return `hace ${days} días`;
+  },
+
+  renderBodyWeightWidget(user) {
+    const bwData = user.bodyWeight || [];
+    if (!bwData.length) {
+      return `
+        <div class="bw-mini-widget" onclick="App.navigate('profile')" style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all var(--transition-fast)">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--color-accent-dim);display:flex;align-items:center;justify-content:center;font-size:1.1rem">⚖️</div>
+          <div style="flex:1">
+            <div style="font-size:0.75rem;color:var(--color-text-tertiary)">Peso Corporal</div>
+            <div style="font-size:0.85rem;color:var(--color-text-secondary)">Toca para registrar tu primer peso</div>
+          </div>
+          <div style="font-size:0.7rem;color:var(--color-accent)">+</div>
+        </div>`;
+    }
+    
+    const last = bwData[bwData.length - 1];
+    const prev = bwData.length >= 2 ? bwData[bwData.length - 2] : null;
+    const diff = prev ? (last.weight - prev.weight) : 0;
+    const diffStr = diff > 0 ? `+${diff.toFixed(1)}` : diff < 0 ? diff.toFixed(1) : '—';
+    const diffColor = diff > 0 ? 'var(--color-warning)' : diff < 0 ? 'var(--color-success)' : 'var(--color-text-tertiary)';
+    
+    // Mini sparkline SVG
+    let sparklineSvg = '';
+    if (bwData.length >= 3) {
+      const recent = bwData.slice(-7);
+      const weights = recent.map(d => d.weight);
+      const minW = Math.min(...weights) * 0.995;
+      const maxW = Math.max(...weights) * 1.005;
+      const range = maxW - minW || 1;
+      const sw = 80, sh = 28;
+      const pts = recent.map((d, i) => `${((i / (recent.length - 1)) * sw).toFixed(0)},${(sh - ((d.weight - minW) / range) * sh).toFixed(0)}`).join(' ');
+      const trendColor = weights[weights.length - 1] > weights[0] ? '#FB923C' : '#22C55E';
+      sparklineSvg = `<svg width="${sw}" height="${sh}" style="flex-shrink:0"><polyline points="${pts}" fill="none" stroke="${trendColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+    
+    return `
+      <div class="bw-mini-widget" onclick="App.navigate('profile')" style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:12px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all var(--transition-fast)">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--color-accent-dim);display:flex;align-items:center;justify-content:center;font-size:1.1rem">⚖️</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.7rem;color:var(--color-text-tertiary)">Peso Corporal</div>
+          <div style="display:flex;align-items:baseline;gap:6px">
+            <span style="font-size:1.25rem;font-weight:700;color:var(--color-text)">${last.weight}</span>
+            <span style="font-size:0.75rem;color:var(--color-text-secondary)">${user.units}</span>
+            <span style="font-size:0.7rem;font-weight:600;color:${diffColor}">${diffStr}</span>
+          </div>
+        </div>
+        ${sparklineSvg}
+        <div style="font-size:0.7rem;color:var(--color-text-tertiary)">${bwData.length} reg.</div>
+      </div>`;
   },
 
   renderQuickActions(routines) {
