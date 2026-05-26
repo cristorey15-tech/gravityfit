@@ -99,6 +99,8 @@ export const RestTimer = {
   },
   
   start(seconds) {
+    // Clear any existing timer before starting a new one
+    this.clearTimer();
     this.total = seconds;
     this.endTime = Date.now() + (seconds * 1000);
     this.render();
@@ -179,17 +181,21 @@ export const RestTimer = {
     this.update();
   },
   
+  clearTimer() {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+    this.clearLoudNotification();
+  },
+
   skip() { this.finish(true); },
   
   finish(isSkip = false) {
-    clearInterval(this.interval);
-    this.interval = null;
+    this.clearTimer();
     this.endTime = 0;
     this.total = 0;
     this.overlay.classList.remove('active');
-    
-    // Clear scheduled notification
-    this.clearLoudNotification();
     
     // Play loud alarm
     if (!isSkip) {

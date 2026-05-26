@@ -544,12 +544,29 @@ export const HistoryScreen = {
       return wrapHtml;
     }).join('');
 
+    const hrHtml = w.heartRateData ? `
+      <div style="display:flex;gap:12px;margin-bottom:16px;padding:12px;background:var(--color-bg-card);border-radius:var(--radius-md)">
+        <div style="flex:1;text-align:center">
+          <div style="font-size:1rem;font-weight:bold;color:var(--color-danger)">${w.heartRateData.max}</div>
+          <div style="font-size:0.65rem;color:var(--color-text-tertiary)">FC Máx</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div style="font-size:1rem;font-weight:bold;color:var(--color-info)">${w.heartRateData.avg}</div>
+          <div style="font-size:0.65rem;color:var(--color-text-tertiary)">FC Prom</div>
+        </div>
+        <div style="flex:1;text-align:center">
+          <div style="font-size:1rem;font-weight:bold;color:var(--color-warning)">${w.heartRateData.totalCalories}</div>
+          <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Cal</div>
+        </div>
+      </div>` : '';
+
     Modal.show(`
       <div style="display:flex;gap:16px;margin-bottom:16px;font-size:0.8125rem;color:var(--color-text-secondary)">
         <span>📅 ${this.formatDate(w.finishedAt)}</span>
         <span>⏱ ${HomeScreen.formatDuration(w.duration)}</span>
         <span>📊 ${HomeScreen.formatVolume(vol, user.units)}</span>
       </div>
+      ${hrHtml}
       ${exHtml}
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn btn-primary flex-1" onclick="HistoryScreen.repeatWorkout('${id}')">🔄 Repetir</button>

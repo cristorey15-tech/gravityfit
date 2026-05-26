@@ -35,6 +35,7 @@ export const WorkoutScreen = {
           <div id="ble-container" style="display:flex;align-items:center;gap:4px;background:var(--color-bg-input);border:1px solid var(--color-border);padding:4px 8px;border-radius:12px;cursor:pointer" onclick="typeof BLE !== 'undefined' && (BLE.device ? BLE.disconnect() : BLE.connect())">
             <span id="ble-heart-icon" style="transition:transform 0.1s;font-size:0.8rem">❤️</span>
             <span id="ble-bpm-value" style="font-weight:bold;font-size:0.85rem;min-width:20px;text-align:center">${typeof window.BLE !== 'undefined' && window.BLE.currentBPM ? window.BLE.currentBPM : '--'}</span>
+            <span id="ble-zone-indicator" style="font-size:0.7rem;margin-left:1px">💚</span>
             <span style="font-size:0.7rem;color:var(--color-text-tertiary);margin-left:2px">|<span id="ble-cal-value" style="margin-left:4px;color:var(--color-warning);font-weight:bold">${typeof window.BLE !== 'undefined' ? Math.floor(window.BLE.caloriesBurned) : 0}</span> cal</span>
           </div>
           <div class="workout-timer-display" id="workout-elapsed">${this.formatTime(elapsed)}</div>
@@ -670,6 +671,8 @@ export const WorkoutScreen = {
       }
     });
 
+    // Capture heart rate data before disconnecting
+    const hrSummary = typeof window.BLE !== 'undefined' ? window.BLE.getSessionHRSummary() : null;
     if (typeof window.BLE !== 'undefined' && window.BLE.device) {
       window.BLE.disconnect();
     }
@@ -678,7 +681,8 @@ export const WorkoutScreen = {
       ...this.activeWorkout,
       finishedAt: now.toISOString(),
       duration,
-      totalVolume: Storage.getTotalVolume(this.activeWorkout)
+      totalVolume: Storage.getTotalVolume(this.activeWorkout),
+      heartRateData: hrSummary
     };
     Storage.addWorkout(workout);
     Storage.clearActiveWorkout();
@@ -793,6 +797,22 @@ export const WorkoutScreen = {
             <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-top:4px">TIEMPO</div>
           </div>
         </div>
+        
+        ${w.heartRateData ? `
+        <div style="display:flex;gap:12px;justify-content:center;margin-bottom:20px">
+          <div style="background:var(--color-surface-hover);padding:12px;border-radius:12px;flex:1">
+            <div style="font-size:1.25rem;font-weight:bold;color:var(--color-danger)">${w.heartRateData.max}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-top:4px">FC MÁX</div>
+          </div>
+          <div style="background:var(--color-surface-hover);padding:12px;border-radius:12px;flex:1">
+            <div style="font-size:1.25rem;font-weight:bold;color:var(--color-info)">${w.heartRateData.avg}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-top:4px">FC PROM</div>
+          </div>
+          <div style="background:var(--color-surface-hover);padding:12px;border-radius:12px;flex:1">
+            <div style="font-size:1.25rem;font-weight:bold;color:var(--color-warning)">${w.heartRateData.totalCalories}</div>
+            <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-top:4px">CAL</div>
+          </div>
+        </div>` : ''}
         
         <div style="text-align:left;background:var(--color-surface-hover);padding:12px;border-radius:12px;font-size:0.875rem">
           ${w.exercises.slice(0, 3).map(e => {

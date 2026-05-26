@@ -7,9 +7,9 @@
 .home-greeting h1 {
   font-size: var(--font-size-3xl);
   font-weight: 800;
-  color: #fff;
-  text-shadow: 0 0 20px rgba(255,255,255,0.08), 0 0 60px rgba(255,255,255,0.04);
+  color: var(--color-text-primary);
 }
+
 .home-greeting p { font-size:var(--font-size-sm); color:var(--color-text-secondary); }
 .home-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-3); margin:var(--space-5) 0; }
 .home-start-btn {
@@ -20,7 +20,7 @@
   justify-content:center; gap:var(--space-3); box-shadow:var(--shadow-glow-strong);
   transition:all var(--transition-base); margin-bottom:var(--space-6);
 }
-.home-start-btn:hover { transform:translateY(-2px); box-shadow:0 0 40px rgba(163,255,18,0.3); }
+.home-start-btn:hover { transform:translateY(-2px); box-shadow:var(--shadow-glow-strong); }
 .home-start-btn:active { transform:scale(0.98); }
 .home-start-btn svg { width:24px; height:24px; }
 .home-section-title {
@@ -67,7 +67,7 @@
 .workout-add-exercise:hover { border-color:var(--color-accent); background:var(--color-accent-dim); }
 .workout-finish-bar {
   position:sticky; bottom:calc(var(--nav-height) + var(--safe-area-bottom));
-  padding:var(--space-3) var(--space-5); background:rgba(13,13,13,0.95);
+  padding:var(--space-3) var(--space-5); background:var(--nav-bg);
   backdrop-filter:blur(10px); border-top:1px solid var(--color-border);
   z-index:var(--z-sticky);
 }

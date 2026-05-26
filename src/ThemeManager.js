@@ -55,9 +55,9 @@ const THEMES = {
 
 class ThemeManager {
   constructor() {
-    this._currentTheme = 'dark';
+    this._currentTheme = 'light';
     this._listeners = [];
-    this._mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+    this._mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     this._mediaQuery.addEventListener('change', () => this._handleSystemChange());
   }
 
@@ -68,7 +68,7 @@ class ThemeManager {
       this._currentTheme = saved;
     } else {
       // Use system preference
-      this._currentTheme = this._mediaQuery.matches ? 'light' : 'dark';
+      this._currentTheme = this._mediaQuery.matches ? 'dark' : 'light';
     }
     this.apply(this._currentTheme);
     Logger.info(`ThemeManager initialized with "${this._currentTheme}" theme`);
@@ -94,8 +94,8 @@ class ThemeManager {
 
   apply(theme) {
     if (!THEMES[theme]) {
-      Logger.warn(`Theme "${theme}" not found, falling back to dark`);
-      theme = 'dark';
+      Logger.warn(`Theme "${theme}" not found, falling back to light`);
+      theme = 'light';
     }
 
     const vars = THEMES[theme];
@@ -136,7 +136,7 @@ class ThemeManager {
   _handleSystemChange() {
     // Only auto-switch if user hasn't manually set a preference
     if (!localStorage.getItem('gf_theme')) {
-      const newTheme = this._mediaQuery.matches ? 'light' : 'dark';
+      const newTheme = this._mediaQuery.matches ? 'dark' : 'light';
       this.apply(newTheme);
     }
   }

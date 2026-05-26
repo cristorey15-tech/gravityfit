@@ -4,8 +4,8 @@
   "description": "Tu tracker de entrenamiento personal",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#0D0D0D",
-  "theme_color": "#0D0D0D",
+  "background_color": "#F5F5F5",
+  "theme_color": "#F5F5F5",
   "orientation": "portrait",
   "icons": [
     {

@@ -31,7 +31,7 @@ describe('Storage', () => {
       expect(user.units).toBe('kg');
       expect(user.defaultRestTimer).toBe(90);
       expect(user.weeklyGoal).toBe(4);
-      expect(user.theme).toBe('dark');
+      expect(user.theme).toBe('light');
     });
 
     it('should save and retrieve user', () => {
@@ -43,7 +43,7 @@ describe('Storage', () => {
     });
 
     it('should return the same user object reference after save', () => {
-      const testUser = { name: 'Test', units: 'kg', defaultRestTimer: 60, weeklyGoal: 5, theme: 'dark', favorites: [], bodyWeight: [], achievements: [] };
+      const testUser = { name: 'Test', units: 'kg', defaultRestTimer: 60, weeklyGoal: 5, theme: 'light', favorites: [], bodyWeight: [], achievements: [] };
       Storage.saveUser(testUser);
       const retrieved = Storage.getUser();
       expect(retrieved).toEqual(testUser);

@@ -119,7 +119,7 @@ export const Storage = {
       units: 'kg',
       defaultRestTimer: 90,
       weeklyGoal: 4,
-      theme: 'dark',
+      theme: 'light',
       favorites: [],
       bodyWeight: [],
       achievements: []
@@ -283,6 +283,8 @@ export const Storage = {
       routines: this.getRoutines(),
       workouts: this.getWorkouts(),
       customExercises: this.getCustomExercises(),
+      programs: this.getPrograms(),
+      measurements: this.getBodyMeasurements(),
       exportedAt: new Date().toISOString()
     }, null, 2);
   },
@@ -293,6 +295,8 @@ export const Storage = {
       if (data.routines) this.saveRoutines(data.routines);
       if (data.workouts) this.saveWorkouts(data.workouts);
       if (data.customExercises) this._set(this.KEYS.CUSTOM_EXERCISES, data.customExercises);
+      if (data.programs) this.savePrograms(data.programs);
+      if (data.measurements) this._set(this.KEYS.MEASUREMENTS, data.measurements);
       return true;
     } catch(e) { Logger.error('Import data failed:', e); return false; }
   },
