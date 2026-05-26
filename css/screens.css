@@ -499,6 +499,131 @@
   object-fit: contain;
 }
 
+/* --- RPE Auto-Prompt (Feature O) --- */
+.rpe-prompt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: all 0.2s ease;
+}
+.rpe-prompt.active {
+  opacity: 1;
+  transform: translateX(0);
+}
+.rpe-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rpe-btn:hover {
+  background: var(--color-accent-dim);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.rpe-btn:active {
+  transform: scale(0.9);
+}
+
+/* --- Planner Drag & Drop (Feature G) --- */
+.planner-day-slot {
+  background: var(--color-bg-card);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  min-height: 80px;
+  transition: all var(--transition-fast);
+}
+.planner-day-slot.drag-over {
+  border-color: var(--color-accent);
+  background: var(--color-accent-dim);
+  border-style: solid;
+}
+.planner-empty-slot {
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 1.2rem;
+  padding: 20px 0;
+  opacity: 0.5;
+}
+.planner-day-routine {
+  background: var(--color-accent-dim);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  animation: scaleIn 0.2s ease-out;
+}
+.planner-day-routine:hover {
+  background: rgba(248,113,113,0.15);
+  border-color: var(--color-danger);
+}
+.planner-routine-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: var(--font-weight-medium);
+  cursor: grab;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+.planner-routine-chip:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-dim);
+}
+.planner-routine-chip:active {
+  cursor: grabbing;
+  transform: scale(0.95);
+}
+
+/* --- AMRAP/EMOM Header Styles (Feature D) --- */
+.workout-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.workout-mode-badge.amrap {
+  background: rgba(251,146,60,0.2);
+  color: #FB923C;
+  border: 1px solid rgba(251,146,60,0.3);
+}
+.workout-mode-badge.emom {
+  background: rgba(96,165,250,0.2);
+  color: #60A5FA;
+  border: 1px solid rgba(96,165,250,0.3);
+}
+.workout-round-display {
+  font-weight: var(--font-weight-bold);
+  font-size: 0.8rem;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Set Flash Effect (C4) --- */
 @keyframes setFlash {
   0% { background-color: rgba(163,255,18,0.25); }
@@ -547,6 +672,29 @@
   color: var(--color-accent);
   font-weight: var(--font-weight-semibold);
   animation: pulse 2s ease-in-out infinite;
+}
+
+/* --- Swipe Instruction Toast (Feature C) --- */
+.swipe-hint {
+  position: fixed;
+  bottom: calc(var(--nav-height) + 80px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 8px 16px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  animation: swipeHintAnim 2s ease-in-out infinite;
+  z-index: var(--z-toast);
+  pointer-events: none;
+  opacity: 0.8;
+}
+@keyframes swipeHintAnim {
+  0%, 100% { transform: translateX(-50%) translateX(0); }
+  50% { transform: translateX(-50%) translateX(20px); }
 }
 
 /* --- Skeleton Loading (C2) --- */

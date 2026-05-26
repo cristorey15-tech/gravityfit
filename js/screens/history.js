@@ -640,6 +640,100 @@ export const HistoryScreen = {
     this.render();
   },
 
+  // --- FEATURE N: Edit methods for workout detail ---
+  _editWorkoutId: null,
+
+  _editSet(exIdx, setIdx, field, value) {
+    const w = Storage.getWorkout(this._editWorkoutId);
+    if (!w) return;
+    const ex = (w.exercises || [])[exIdx];
+    if (!ex) return;
+    const set = (ex.sets || [])[setIdx];
+    if (!set) return;
+    if (field === 'completed') {
+      set.completed = value;
+    } else {
+      set[field] = parseFloat(value) || null;
+    }
+    // Save the change back
+    const workouts = Storage.getWorkouts();
+    const idx = workouts.findIndex(x => x.id === this._editWorkoutId);
+    if (idx !== -1) {
+      workouts[idx] = w;
+      Storage.saveWorkouts(workouts);
+    }
+  },
+
+  saveEditWorkout(id) {
+    Toast.show('💾 Cambios guardados', 'success');
+    if (navigator.vibrate) navigator.vibrate(10);
+    this._editWorkoutId = null;
+    this.showWorkoutDetail(id);
+  },
+
+  // --- FEATURE N: Enhanced progression charts ---
+  renderEnhancedCharts() {
+    const workouts = Storage.getWorkouts();
+    if (workouts.length < 2) return '';
+    
+    // Collect per-exercise data
+    const exData = {};
+    workouts.slice().reverse().forEach(w => {
+      (w.exercises || []).forEach(ex => {
+        if (!exData[ex.exerciseId]) exData[ex.exerciseId] = [];
+        const completed = (ex.sets || []).filter(s => s.completed);
+        if (completed.length > 0) {
+          const maxW = Math.max(...completed.map(s => s.weight || 0));
+          const totalVol = completed.reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0);
+          exData[ex.exerciseId].push({ date: w.finishedAt, maxW, totalVol, sets: completed.length });
+        }
+      });
+    });
+    
+    // Get top 3 most trained exercises
+    const sorted = Object.entries(exData)
+      .map(([id, data]) => ({ id, count: data.length, data }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+    
+    if (sorted.length === 0) return '';
+    
+    let html = '<h3 style="font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);margin:16px 0 12px">📈 Progresión Detallada</h3>';
+    
+    sorted.forEach(({ id, data }) => {
+      const ex = Storage.getExercise(id);
+      const name = ex ? ex.name : id;
+      const values = data.map(d => ({ value: d.maxW, label: new Date(d.date).toLocaleDateString('es-ES', { day:'numeric', month:'short' }) }));
+      
+      html += `
+        <div class="progress-chart-container">
+          <h4>${name} — Peso Máximo</h4>
+          <canvas id="chart-${id}" width="400" height="180"></canvas>
+          <div style="display:flex;gap:12px;margin-top:8px;font-size:0.75rem;color:var(--color-text-secondary);justify-content:center">
+            <span>📊 ${data.length} sesiones</span>
+            <span>🏆 ${Math.max(...data.map(d => d.maxW))} ${Storage.getUser().units}</span>
+            <span>📈 ${data[data.length-1].maxW > data[0].maxW ? '↑' : data[data.length-1].maxW < data[0].maxW ? '↓' : '→'}</span>
+          </div>
+        </div>`;
+    });
+    
+    // Build volume progression chart (overall)
+    const volData = workouts.slice().reverse().map((w, i) => ({
+      value: Storage.getTotalVolume(w),
+      label: `${i + 1}`
+    }));
+    
+    if (volData.length >= 2) {
+      html += `
+        <div class="progress-chart-container">
+          <h4>📊 Volumen Total por Sesión</h4>
+          <canvas id="chart-volume-prog" width="400" height="180"></canvas>
+        </div>`;
+    }
+    
+    return html;
+  },
+
   formatDate(dateStr) {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });

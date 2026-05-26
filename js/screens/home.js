@@ -267,6 +267,99 @@ export const HomeScreen = {
     return html;
   },
 
+  // --- FEATURE L: End of Month Summary ---
+  checkMonthSummary() {
+    // Check if it's time to show an end-of-month report
+    const lastShown = localStorage.getItem('gf_month_summary_shown');
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${now.getMonth()}`;
+    
+    if (lastShown === currentMonth) return; // Already shown this month
+    
+    const workouts = Storage.getWorkouts();
+    if (workouts.length < 3) return; // Not enough data
+    
+    // Check if we're in a new month (at least 3 days into it)
+    if (now.getDate() < 3) return;
+    
+    // Calculate previous month stats
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    
+    const monthWorkouts = workouts.filter(w => {
+      if (!w.finishedAt) return false;
+      const d = new Date(w.finishedAt);
+      return d >= prevMonthStart && d <= prevMonthEnd;
+    });
+    
+    if (monthWorkouts.length === 0) return;
+    
+    // Calculate stats
+    const totalVol = monthWorkouts.reduce((s, w) => s + Storage.getTotalVolume(w), 0);
+    const totalDuration = monthWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
+    
+    // Count unique exercises
+    const exSet = new Set();
+    monthWorkouts.forEach(w => (w.exercises || []).forEach(e => exSet.add(e.exerciseId)));
+    
+    // Best workout by volume
+    let bestW = monthWorkouts.reduce((best, w) => Storage.getTotalVolume(w) > Storage.getTotalVolume(best) ? w : best, monthWorkouts[0]);
+    const bestExData = bestW ? (bestW.exercises || []).map(e => Storage.getExercise(e.exerciseId)).filter(Boolean).slice(0, 2) : [];
+    
+    const user = Storage.getUser();
+    const monthName = prevMonthStart.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    
+    // Store that we've shown it
+    localStorage.setItem('gf_month_summary_shown', currentMonth);
+    
+    // Show after a small delay
+    setTimeout(() => {
+      Toast.show(`📊 Resumen de ${monthName} disponible!`, 'info', 5000);
+      setTimeout(() => {
+        const html = `
+          <div style="text-align:center;padding:8px 0">
+            <div style="font-size:3rem;margin-bottom:8px">📊</div>
+            <h3 style="margin-bottom:4px">Resumen de ${monthName}</h3>
+            <div style="color:var(--color-text-secondary);font-size:0.85rem;margin-bottom:20px">¡Impresionante, ${user.name}!</div>
+            
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+              <div style="background:var(--color-bg-card);padding:16px;border-radius:12px">
+                <div style="font-size:1.5rem;font-weight:bold;color:var(--color-accent)">${monthWorkouts.length}</div>
+                <div style="font-size:0.75rem;color:var(--color-text-tertiary)">Entrenamientos</div>
+              </div>
+              <div style="background:var(--color-bg-card);padding:16px;border-radius:12px">
+                <div style="font-size:1.5rem;font-weight:bold;color:var(--color-accent)">${HomeScreen.formatVolume(totalVol, user.units)}</div>
+                <div style="font-size:0.75rem;color:var(--color-text-tertiary)">Volumen Total</div>
+              </div>
+              <div style="background:var(--color-bg-card);padding:16px;border-radius:12px">
+                <div style="font-size:1.5rem;font-weight:bold;color:var(--color-accent)">${Math.floor(totalDuration / 60)}h ${totalDuration % 60}min</div>
+                <div style="font-size:0.75rem;color:var(--color-text-tertiary)">Tiempo Total</div>
+              </div>
+              <div style="background:var(--color-bg-card);padding:16px;border-radius:12px">
+                <div style="font-size:1.5rem;font-weight:bold;color:var(--color-accent)">${exSet.size}</div>
+                <div style="font-size:0.75rem;color:var(--color-text-tertiary)">Ejercicios Distintos</div>
+              </div>
+            </div>
+            
+            ${bestW ? `
+            <div style="background:var(--color-accent-dim);padding:12px;border-radius:12px;margin-bottom:20px">
+              <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-bottom:4px">🏆 Mejor Entrenamiento</div>
+              <div style="font-weight:bold;font-size:0.9rem">${bestW.name}</div>
+              <div style="font-size:0.8rem;color:var(--color-accent)">${HomeScreen.formatVolume(Storage.getTotalVolume(bestW), user.units)} · ${HomeScreen.formatDuration(bestW.duration)}</div>
+              <div style="font-size:0.7rem;color:var(--color-text-tertiary);margin-top:4px">${bestExData.map(e => e?.name || '').filter(Boolean).join(', ')}</div>
+            </div>` : ''}
+            
+            <button class="btn btn-primary btn-block" onclick="Modal.hide()">🔥 ¡A por el siguiente mes!</button>
+          </div>`;
+        
+        // Use the existing Modal from window scope
+        if (window.Modal) {
+          window.Modal.show(html, { title: `📊 ${monthName}` });
+        }
+      }, 2000);
+    }, 3000);
+  },
+
   renderActiveProgram() {
     const program = Storage.getActiveProgram();
     if (!program) return '';

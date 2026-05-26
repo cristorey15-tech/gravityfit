@@ -22,7 +22,11 @@ export const WorkoutScreen = {
           <div class="empty-state-icon" style="width:48px;height:48px;margin:0 auto 16px">${Icons.plus}</div>
           <div class="empty-state-title">Sin entrenamiento activo</div>
           <div class="empty-state-text">Empieza un entrenamiento vacío o selecciona una rutina</div>
-          <button class="btn btn-primary btn-lg" onclick="App.startEmptyWorkout()" style="margin-top:16px">Empezar Entrenamiento</button>
+          <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;justify-content:center">
+            <button class="btn btn-primary btn-lg" onclick="App.startEmptyWorkout()">Empezar Entrenamiento</button>
+            <button class="btn btn-outline btn-lg" onclick="WorkoutScreen.startAMRAP()" style="display:flex;align-items:center;gap:6px">⏱️ AMRAP</button>
+            <button class="btn btn-outline btn-lg" onclick="WorkoutScreen.startEMOM()" style="display:flex;align-items:center;gap:6px">⏲️ EMOM</button>
+          </div>
         </div>`;
       return;
     }
@@ -38,7 +42,14 @@ export const WorkoutScreen = {
             <span id="ble-zone-indicator" style="font-size:0.7rem;margin-left:1px">💚</span>
             <span style="font-size:0.7rem;color:var(--color-text-tertiary);margin-left:2px">|<span id="ble-cal-value" style="margin-left:4px;color:var(--color-warning);font-weight:bold">${typeof window.BLE !== 'undefined' ? Math.floor(window.BLE.caloriesBurned) : 0}</span> cal</span>
           </div>
-          <div class="workout-timer-display" id="workout-elapsed">${this.formatTime(elapsed)}</div>
+          ${this.isModeActive ? `
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.pauseAMRAPEMOM()" style="font-size:1.2rem;opacity:0.7">${this._isPaused ? '▶️' : '⏸️'}</button>
+              <div class="workout-timer-display" id="workout-elapsed" style="font-variant-numeric:tabular-nums;min-width:60px">${this.formatTime(elapsed)}</div>
+              <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.completeAMRAPRound()" style="font-size:1rem;background:var(--color-accent-dim);color:var(--color-accent);padding:4px 8px;border-radius:12px">+1 Ronda</button>
+            </div>
+          ` : `
+          <div class="workout-timer-display" id="workout-elapsed">${this.formatTime(elapsed)}</div>`}
         </div>
         <button class="btn btn-primary btn-sm" onclick="WorkoutScreen.finishWorkout()">Finalizar</button>
       </div>
@@ -56,6 +67,7 @@ export const WorkoutScreen = {
       </div>
     `;
     this.startTimer();
+    this.showSwipeHint();
   },
 
   renderExercises(user) {
@@ -643,6 +655,10 @@ export const WorkoutScreen = {
           PRCelebration.show(exData ? exData.name : 'Ejercicio', set.weight, set.reps, exUnit);
         }
       }
+
+      // --- FEATURE O: RPE Auto-Prompt after completing a set ---
+      this._pendingRPE = { exIdx, setIdx };
+      setTimeout(() => this.showRPEPrompt(exIdx, setIdx), 200);
     }
     
     this.save();
@@ -667,10 +683,314 @@ export const WorkoutScreen = {
                              this.activeWorkout.exercises[exIdx + 1].supersetId === this.activeWorkout.exercises[exIdx].supersetId;
                              
       if (!isLinkedToNext) {
-        RestTimer.start(user.defaultRestTimer);
+        RestTimer.start(user.defaultRestTimer, this.getNextExerciseInfo());
       }
     }
   },
+
+  // --- FEATURE O: RPE Auto-Prompt ---
+  showRPEPrompt(exIdx, setIdx) {
+    const existing = document.getElementById('rpe-prompt');
+    if (existing) existing.remove();
+    
+    const setRows = document.querySelectorAll(`.exercise-block[data-ex-idx="${exIdx}"] .set-row`);
+    if (!setRows || !setRows[setIdx]) return;
+    const row = setRows[setIdx];
+    
+    const prompt = document.createElement('div');
+    prompt.id = 'rpe-prompt';
+    prompt.className = 'rpe-prompt';
+    prompt.innerHTML = `
+      <span style="font-size:0.7rem;color:var(--color-text-tertiary);margin-right:4px">RPE</span>
+      ${[6,7,8,9,10].map(v => `
+        <button class="rpe-btn" data-rpe="${v}" onclick="WorkoutScreen.setRPESet(${exIdx},${setIdx},${v})">${v}</button>
+      `).join('')}
+    `;
+    row.appendChild(prompt);
+    setTimeout(() => prompt.classList.add('active'), 10);
+  },
+
+  setRPESet(exIdx, setIdx, rpe) {
+    const set = this.activeWorkout.exercises[exIdx].sets[setIdx];
+    set.rpe = rpe;
+    this.save();
+    const prompt = document.getElementById('rpe-prompt');
+    if (prompt) {
+      prompt.classList.remove('active');
+      setTimeout(() => prompt.remove(), 200);
+    }
+    if (navigator.vibrate) navigator.vibrate(5);
+  },
+
+  // --- FEATURE E: Next Exercise Info for RestTimer ---
+  getNextExerciseInfo() {
+    if (!this.activeWorkout) return null;
+    const exercises = this.activeWorkout.exercises;
+    // Find the next incomplete set
+    for (let i = 0; i < exercises.length; i++) {
+      const ex = exercises[i];
+      if (ex.sets.some(s => !s.completed)) {
+        const exData = Storage.getExercise(ex.exerciseId);
+        return { name: exData ? exData.name : ex.exerciseId, index: i + 1, total: exercises.length };
+      }
+    }
+    return null;
+  },
+
+  // --- FEATURE D: AMRAP / EMOM Training Modes ---
+  isModeActive: false,
+  _modeType: null, // 'amrap' | 'emom'
+  _rounds: 0,
+  _isPaused: false,
+  _modeInterval: null,
+  _modeRemaining: 0,
+  _modeTotalRounds: 0,
+  _modeTargetRounds: 0,
+
+  startAMRAP() {
+    Modal.show(`
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-size:3rem;margin-bottom:12px">⏱️</div>
+        <h3 style="margin-bottom:8px">AMRAP</h3>
+        <p style="font-size:0.875rem;color:var(--color-text-secondary);margin-bottom:20px">As Many Rounds As Possible — tantas rondas como puedas en X minutos</p>
+        <div class="input-group" style="margin-bottom:16px">
+          <label class="input-label">Duración (minutos)</label>
+          <input type="number" id="amrap-minutes" class="input input-number" value="10" min="1" max="120" style="font-size:1.5rem;height:50px;text-align:center" inputmode="numeric">
+        </div>
+        <div class="input-group" style="margin-bottom:16px">
+          <label class="input-label">Nombre del Entrenamiento</label>
+          <input class="input" id="amrap-name" value="AMRAP" placeholder="Ej: AMRAP 10min">
+        </div>
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+          <button class="btn btn-primary flex-1" onclick="WorkoutScreen.beginAMRAP()">¡Empezar! 🚀</button>
+        </div>
+      </div>
+    `, { title: '⏱️ Modo AMRAP' });
+    setTimeout(() => { const i = document.getElementById('amrap-minutes'); if (i) { i.focus(); i.select(); } }, 300);
+  },
+
+  startEMOM() {
+    Modal.show(`
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-size:3rem;margin-bottom:12px">⏲️</div>
+        <h3 style="margin-bottom:8px">EMOM</h3>
+        <p style="font-size:0.875rem;color:var(--color-text-secondary);margin-bottom:20px">Every Minute On the Minute — un ejercicio cada minuto durante X minutos</p>
+        <div class="input-group" style="margin-bottom:16px">
+          <label class="input-label">Rondas (minutos)</label>
+          <input type="number" id="emom-rounds" class="input input-number" value="10" min="1" max="60" style="font-size:1.5rem;height:50px;text-align:center" inputmode="numeric">
+        </div>
+        <div class="input-group" style="margin-bottom:16px">
+          <label class="input-label">Nombre del Entrenamiento</label>
+          <input class="input" id="emom-name" value="EMOM" placeholder="Ej: EMOM 10min">
+        </div>
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+          <button class="btn btn-primary flex-1" onclick="WorkoutScreen.beginEMOM()">¡Empezar! 🚀</button>
+        </div>
+      </div>
+    `, { title: '⏲️ Modo EMOM' });
+    setTimeout(() => { const i = document.getElementById('emom-rounds'); if (i) { i.focus(); i.select(); } }, 300);
+  },
+
+  beginAMRAP() {
+    const minutes = parseInt(document.getElementById('amrap-minutes')?.value) || 10;
+    const name = document.getElementById('amrap-name')?.value.trim() || 'AMRAP';
+    Modal.hide();
+    
+    this.isModeActive = true;
+    this._modeType = 'amrap';
+    this._rounds = 0;
+    this._isPaused = false;
+    this._modeTotalRounds = 0;
+    this._modeTargetRounds = minutes; // store as target minutes
+    
+    this.activeWorkout = {
+      name,
+      routineId: null,
+      exercises: [],
+      startedAt: new Date().toISOString(),
+    };
+    this.startTime = Date.now();
+    
+    // Start the AMRAP countdown timer
+    this._modeRemaining = minutes * 60;
+    this._startModeTimer();
+    
+    this.save();
+    this.requestWakeLock();
+    App.navigate('workout');
+    
+    // Show exercise picker right away
+    setTimeout(() => this.showExercisePicker(), 500);
+  },
+
+  beginEMOM() {
+    const rounds = parseInt(document.getElementById('emom-rounds')?.value) || 10;
+    const name = document.getElementById('emom-name')?.value.trim() || 'EMOM';
+    Modal.hide();
+    
+    this.isModeActive = true;
+    this._modeType = 'emom';
+    this._rounds = 0;
+    this._isPaused = false;
+    this._modeTotalRounds = 0;
+    this._modeTargetRounds = rounds;
+    
+    this.activeWorkout = {
+      name,
+      routineId: null,
+      exercises: [],
+      startedAt: new Date().toISOString(),
+    };
+    this.startTime = Date.now();
+    
+    // EMOM: each round = 60 seconds
+    this._modeRemaining = rounds * 60;
+    this._startModeTimer();
+    
+    this.save();
+    this.requestWakeLock();
+    App.navigate('workout');
+    
+    setTimeout(() => this.showExercisePicker(), 500);
+  },
+
+  _startModeTimer() {
+    this._stopModeTimer();
+    this._modeInterval = setInterval(() => {
+      if (this._isPaused) return;
+      this._modeRemaining--;
+      
+      // EMOM: beep every minute
+      if (this._modeType === 'emom') {
+        const elapsed = this._modeTargetRounds * 60 - this._modeRemaining;
+        const currentMinute = Math.floor(elapsed / 60);
+        const secondInMinute = elapsed % 60;
+        if (secondInMinute === 0 && elapsed > 0) {
+          // New EMOM round
+          this._rounds++;
+          if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+          Toast.show(`⏲️ Ronda ${this._rounds}/${this._modeTargetRounds} — ¡YA!`, 'info', 2000);
+        }
+        // 10 second warning
+        if (secondInMinute === 50 && elapsed > 0) {
+          if (navigator.vibrate) navigator.vibrate(50);
+        }
+      }
+      
+      // Update display
+      const el = document.getElementById('workout-elapsed');
+      if (el) {
+        el.textContent = this._modeType === 'amrap'
+          ? this.formatTime(this._modeRemaining)
+          : this.formatTime(this._modeRemaining);
+      }
+      
+      if (this._modeRemaining <= 0) {
+        // Time's up! Finish the workout
+        this._stopModeTimer();
+        if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]);
+        Toast.show(this._modeType === 'amrap' ? '⏱️ ¡Tiempo! AMRAP completado' : '⏱️ ¡EMOM completado!', 'success', 4000);
+        this.isModeActive = false;
+        // Auto-finish after a brief delay
+        setTimeout(() => this.finishWorkout(), 2000);
+      }
+    }, 1000);
+  },
+
+  _stopModeTimer() {
+    if (this._modeInterval) {
+      clearInterval(this._modeInterval);
+      this._modeInterval = null;
+    }
+  },
+
+  completeAMRAPRound() {
+    this._rounds++;
+    this._modeTotalRounds = this._rounds;
+    if (navigator.vibrate) navigator.vibrate([100, 50, 200]);
+    Toast.show(`✅ Ronda ${this._rounds} completada! Sigue así! 🔥`, 'success', 1500);
+    
+    // Update display
+    const roundEl = document.querySelector('[onclick*="completeAMRAPRound"]');
+    if (roundEl) {
+      roundEl.textContent = `+1 Ronda (${this._rounds})`;
+    }
+  },
+
+  pauseAMRAPEMOM() {
+    this._isPaused = !this._isPaused;
+    Toast.show(this._isPaused ? '⏸️ Pausado' : '▶️ Reanudado', 'info', 1000);
+    this.render();
+  },
+
+  // --- FEATURE C: Swipe to complete set ---
+  _swipeState: null,
+
+  showSwipeHint() {
+    // Show swipe hint only once per session
+    if (localStorage.getItem('gf_swipe_hint_shown')) return;
+    localStorage.setItem('gf_swipe_hint_shown', '1');
+    const hint = document.createElement('div');
+    hint.className = 'swipe-hint';
+    hint.id = 'swipe-hint';
+    hint.textContent = '↔ Desliza para completar serie';
+    document.body.appendChild(hint);
+    setTimeout(() => {
+      const el = document.getElementById('swipe-hint');
+      if (el) el.remove();
+    }, 4000);
+  },
+
+  initSwipeDetection() {
+    const list = document.getElementById('workout-exercises-list');
+    if (!list) return;
+    
+    list.addEventListener('touchstart', (e) => {
+      const row = e.target.closest('.set-row');
+      if (!row) { this._swipeState = null; return; }
+      const touch = e.touches[0];
+      this._swipeState = { startX: touch.clientX, startY: touch.clientY, row, moved: false };
+      row.style.transition = 'transform 0.1s ease';
+    }, { passive: true });
+    
+    list.addEventListener('touchmove', (e) => {
+      if (!this._swipeState) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - this._swipeState.startX;
+      const dy = touch.clientY - this._swipeState.startY;
+      if (Math.abs(dy) > Math.abs(dx) * 0.5) { this._swipeState = null; return; }
+      if (Math.abs(dx) > 10) this._swipeState.moved = true;
+      if (dx > 0 && dx < 120) {
+        this._swipeState.row.style.transform = `translateX(${dx}px)`;
+        const opacity = Math.min(1, dx / 80);
+        this._swipeState.row.style.borderLeft = `${Math.min(4, dx / 20)}px solid var(--color-accent)`;
+      }
+    }, { passive: true });
+    
+    list.addEventListener('touchend', (e) => {
+      if (!this._swipeState || !this._swipeState.moved) { this._swipeState = null; return; }
+      const row = this._swipeState.row;
+      const finalX = parseFloat(row.style.transform?.replace('translateX(', '') || '0');
+      row.style.transition = 'transform 0.2s ease';
+      row.style.transform = '';
+      row.style.borderLeft = '';
+      if (finalX > 60) {
+        // Find exIdx and setIdx from DOM
+        const block = row.closest('.exercise-block');
+        const exIdx = parseInt(block?.dataset?.exIdx);
+        const setIdx = Array.from(block?.querySelectorAll('.set-row') || []).indexOf(row);
+        if (exIdx >= 0 && setIdx >= 0 && !this.activeWorkout.exercises[exIdx].sets[setIdx].completed) {
+          this.toggleSet(exIdx, setIdx);
+        }
+      }
+      this._swipeState = null;
+    }, { passive: true });
+  },
+
+  // RestTimer callback integration
+  _pendingRPE: null,
 
   cycleSetType(exIdx, setIdx) {
     const types = ['normal', 'warmup', 'drop', 'failure'];

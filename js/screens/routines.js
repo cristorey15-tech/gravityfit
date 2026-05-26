@@ -429,6 +429,167 @@ export const RoutinesScreen = {
     }
   },
 
+  // ==========================================
+  // FEATURE G: Drag-and-Drop Weekly Planner
+  // ==========================================
+  _draggedRoutineId: null,
+  _dropDay: null,
+  _dragOverDay: null,
+
+  startDragPlanner() {
+    const routines = Storage.getRoutines();
+    this._plannerRoutines = [...routines];
+    this._plannerSchedule = []; // Array of { day: 0-6, routineId: string }
+    
+    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    
+    Modal.show(`
+      <div style="margin-bottom:16px">
+        <p style="font-size:0.85rem;color:var(--color-text-secondary);margin-bottom:16px">Arrastra las rutinas a los días de la semana para planificar tu programa visualmente.</p>
+        <div id="planner-week" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:16px">
+          ${dayNames.map((d, i) => `
+            <div class="planner-day-slot" data-day="${i}" 
+              ondrop="RoutinesScreen.onDrop(event, ${i})" dragover="RoutinesScreen.onDragOver(event, ${i})" dragleave="RoutinesScreen.onDragLeave(event)">
+              <div class="planner-day-header" style="font-size:0.6rem;text-align:center;text-transform:uppercase;color:var(--color-text-tertiary);margin-bottom:6px">${d}</div>
+              <div class="planner-day-content" id="planner-day-${i}" style="min-height:60px">
+                <div class="planner-empty-slot">+</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-bottom:8px">
+          <label class="input-label">Nombre del Programa</label>
+          <input class="input" id="planner-name" placeholder="Ej: Mi Programa Semanal" value="Programa Visual">
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="flex:1">
+            <label class="input-label">Semanas</label>
+            <select class="input" id="planner-weeks">
+              ${[4,6,8,10,12].map(w => `<option value="${w}">${w}</option>`).join('')}
+            </select>
+          </div>
+          <div style="flex:1">
+            <label class="input-label">Progresión</label>
+            <select class="input" id="planner-progression">
+              <option value="weight">+Peso</option>
+              <option value="reps">+Reps</option>
+              <option value="free">Libre</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <div class="input-group" style="margin-bottom:16px">
+        <label class="input-label">Tus Rutinas — Arrástralas</label>
+        <div id="planner-routines" style="display:flex;flex-wrap:wrap;gap:8px">
+          ${routines.map(r => `
+            <div class="planner-routine-chip" draggable="true" 
+              ondragstart="RoutinesScreen.onDragStart(event, '${r.id}', '${r.name}')">
+              🏋️ ${r.name}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+        <button class="btn btn-primary flex-1" onclick="RoutinesScreen.savePlannerProgram()">💾 Crear Programa</button>
+      </div>
+    `, { title: '📅 Planificador Semanal Visual' });
+  },
+
+  onDragStart(e, routineId, name) {
+    e.dataTransfer.setData('text/plain', JSON.stringify({ id: routineId, name }));
+    e.dataTransfer.effectAllowed = 'copy';
+    e.target.style.opacity = '0.5';
+  },
+
+  onDragOver(e, day) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    const slot = e.currentTarget;
+    slot.classList.add('drag-over');
+  },
+
+  onDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+  },
+
+  onDrop(e, day) {
+    e.preventDefault();
+    const slot = e.currentTarget;
+    slot.classList.remove('drag-over');
+    
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const { id: routineId, name } = data;
+      
+      // Remove from any other day
+      this._plannerSchedule = this._plannerSchedule.filter(s => s.routineId !== routineId);
+      // Add to this day (replace existing if any)
+      this._plannerSchedule = this._plannerSchedule.filter(s => s.day !== day);
+      this._plannerSchedule.push({ day, routineId });
+      
+      // Update visual
+      this._renderPlannerDay(day);
+      
+      // Clear existing from all days
+      for (let d = 0; d < 7; d++) {
+        this._renderPlannerDay(d);
+      }
+      
+      Toast.show(`✅ ${name} asignado a ${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][day]}`, 'info', 1500);
+    } catch(e) {
+      Logger.warn('Drop error', e);
+    }
+  },
+
+  _renderPlannerDay(day) {
+    const container = document.getElementById(`planner-day-${day}`);
+    if (!container) return;
+    const slot = this._plannerSchedule.find(s => s.day === day);
+    if (slot) {
+      const routine = this._plannerRoutines.find(r => r.id === slot.routineId);
+      container.innerHTML = `
+        <div class="planner-day-routine" onclick="RoutinesScreen.removePlannerDay(${day})">
+          <span style="font-size:0.7rem;font-weight:600">${routine ? routine.name.substring(0, 8) : '?'}</span>
+          <span style="font-size:0.5rem;color:var(--color-text-tertiary);margin-top:2px">tocar = quitar</span>
+        </div>`;
+    } else {
+      container.innerHTML = '<div class="planner-empty-slot">+</div>';
+    }
+  },
+
+  removePlannerDay(day) {
+    this._plannerSchedule = this._plannerSchedule.filter(s => s.day !== day);
+    this._renderPlannerDay(day);
+  },
+
+  savePlannerProgram() {
+    if (this._plannerSchedule.length === 0) {
+      Toast.show('Asigna al menos una rutina a un día', 'error');
+      return;
+    }
+    const name = document.getElementById('planner-name')?.value.trim() || 'Programa Visual';
+    const weeks = parseInt(document.getElementById('planner-weeks')?.value) || 4;
+    const progressionType = document.getElementById('planner-progression')?.value || 'free';
+    
+    Storage.addProgram({
+      name,
+      weeks,
+      progressionType,
+      progressionValue: 2.5,
+      mode: 'weekly',
+      active: true,
+      currentWeek: 1,
+      schedule: this._plannerSchedule
+    });
+    
+    Toast.show('✅ Programa creado visualmente!', 'success');
+    Modal.hide();
+    this.render();
+  },
+
   // --- Programs (Multi-Week) ---
   renderProgramsSection(routines) {
     const programs = Storage.getPrograms();
@@ -437,7 +598,10 @@ export const RoutinesScreen = {
 
     let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <h2 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold)">📅 Programas</h2>
-      <button class="btn btn-outline btn-sm" onclick="RoutinesScreen.showCreateProgram()">+ Programa</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="RoutinesScreen.startDragPlanner()">🎯 Visual</button>
+        <button class="btn btn-outline btn-sm" onclick="RoutinesScreen.showCreateProgram()">+ Programa</button>
+      </div>
     </div>`;
 
     if (programs.length === 0) {

@@ -98,11 +98,12 @@ export const RestTimer = {
     }, { once: true });
   },
   
-  start(seconds) {
+  start(seconds, nextExercise = null) {
     // Clear any existing timer before starting a new one
     this.clearTimer();
     this.total = seconds;
     this.endTime = Date.now() + (seconds * 1000);
+    this.nextExercise = nextExercise;
     this.render();
     this.overlay.classList.add('active');
     
@@ -123,12 +124,26 @@ export const RestTimer = {
     }, 200); // 200ms for smoother visual updates, no drift because of Date.now()
   },
   
+  nextExercise: null,
+  
   render() {
+    const nextEx = this.nextExercise;
+    const nextExHtml = nextEx ? `
+      <div class="timer-next-ex">
+        <span style="font-size:0.65rem;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">Siguiente</span>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <span style="font-size:1.1rem">▶</span>
+          <span style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${nextEx.name}</span>
+          <span style="font-size:0.65rem;color:var(--color-text-tertiary)">${nextEx.index}/${nextEx.total}</span>
+        </div>
+      </div>` : '';
+
     this.overlay.innerHTML = `
       <button class="btn btn-ghost btn-icon rest-minimize-btn" onclick="RestTimer.toggleMinimize(event)" style="position:absolute;top:16px;right:16px;z-index:10">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
       </button>
       <h3>Descanso</h3>
+      ${nextExHtml}
       <div class="timer-circle" onclick="if(RestTimer.overlay.classList.contains('minimized')) RestTimer.toggleMinimize(event)">
         <svg viewBox="0 0 120 120">
           <circle class="timer-bg" cx="60" cy="60" r="54"/>

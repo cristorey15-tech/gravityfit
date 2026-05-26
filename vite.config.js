@@ -21,16 +21,15 @@ export default defineConfig({
       input: 'index.html',
       output: {
         manualChunks(id) {
-          // Split screen modules into separate chunks
+          // Split screens (heaviest modules)
           if (id.includes('/js/screens/')) {
             return 'screens';
           }
-          if (id.includes('/js/components.js')) {
-            return 'components';
+          // Keep core + src together (they have circular deps)
+          if (id.includes('/js/storage.js') || id.includes('/js/components.js') || id.includes('/src/')) {
+            return 'core';
           }
-          if (id.includes('/js/storage.js')) {
-            return 'storage';
-          }
+          // Split standalone features
           if (id.includes('/js/bluetooth.js')) {
             return 'bluetooth';
           }
@@ -42,9 +41,6 @@ export default defineConfig({
           }
           if (id.includes('/js/sync.js')) {
             return 'sync';
-          }
-          if (id.includes('/src/')) {
-            return 'src';
           }
         },
       },

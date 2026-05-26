@@ -217,6 +217,13 @@ export const ProfileScreen = {
               <span class="settings-item-label">Calculadora 1RM</span>
             </div>
           </div>
+          <div class="settings-item" onclick="ProfileScreen.showEvolutionChart()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">📈</span>
+              <span class="settings-item-label">Evolución Corporal (Todo en Uno)</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">Ver</span>
+          </div>
           <div class="settings-item" onclick="ProfileScreen.showBodyWeight()">
             <div class="settings-item-left">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
@@ -729,6 +736,243 @@ export const ProfileScreen = {
       Toast.show('Medidas guardadas ✅', 'success');
     }
     this.showBodyMeasurements();
+  },
+
+  // --- FEATURE H: Body Evolution Chart (All-in-One) ---
+  showEvolutionChart() {
+    const user = Storage.getUser();
+    const measurements = Storage.getBodyMeasurements();
+    const photos = Storage.getPhotos();
+    const workouts = Storage.getWorkouts();
+    const bwData = user.bodyWeight || [];
+    
+    let weightHtml = '';
+    let measureHtml = '';
+    let photoHtml = '';
+    let statsHtml = '';
+    
+    // Combined weight chart
+    if (bwData.length >= 2) {
+      const weights = bwData.map(b => b.weight);
+      const minW = Math.min(...weights);
+      const maxW = Math.max(...weights);
+      const first = bwData[0].weight;
+      const last = bwData[bwData.length - 1].weight;
+      const diff = (last - first).toFixed(1);
+      
+      statsHtml = `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+          <div class="bw-stat"><div class="bw-stat-value" style="font-size:1rem">${bwData.length}</div><div class="bw-stat-label">Registros</div></div>
+          <div class="bw-stat"><div class="bw-stat-value" style="font-size:1rem">${minW.toFixed(1)}</div><div class="bw-stat-label">Mínimo</div></div>
+          <div class="bw-stat"><div class="bw-stat-value" style="font-size:1rem">${maxW.toFixed(1)}</div><div class="bw-stat-label">Máximo</div></div>
+          <div class="bw-stat"><div class="bw-stat-value" style="font-size:1rem;color:${diff > 0 ? 'var(--color-warning)' : 'var(--color-success)'}">${diff > 0 ? '+' : ''}${diff}</div><div class="bw-stat-label">Cambio</div></div>
+        </div>
+      `;
+      
+      weightHtml = `
+        <div class="bw-chart-container">
+          <h4>⚖️ Peso Corporal (${user.units})</h4>
+          <canvas id="evo-weight-chart" width="400" height="160"></canvas>
+        </div>`;
+    }
+    
+    // Measurements trends
+    if (measurements.length >= 2) {
+      const fields = [
+        { key: 'chest', label: 'Pecho', icon: '🟢' },
+        { key: 'waist', label: 'Cintura', icon: '🟡' },
+        { key: 'arm', label: 'Brazo', icon: '🔴' },
+        { key: 'thigh', label: 'Muslo', icon: '🟣' }
+      ];
+      
+      measureHtml = `
+        <div class="bw-chart-container">
+          <h4>📏 Medidas Corporales (cm)</h4>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            ${fields.map(f => {
+              const vals = measurements.map(m => parseFloat(m[f.key]) || 0).filter(v => v > 0);
+              if (vals.length < 2) return '';
+              const current = vals[vals.length - 1];
+              const change = (current - vals[0]).toFixed(1);
+              return `<div style="text-align:center">
+                <div style="font-size:0.65rem;color:var(--color-text-tertiary)">${f.icon} ${f.label}</div>
+                <div style="font-size:1.1rem;font-weight:700">${current}</div>
+                <div style="font-size:0.6rem;color:${change > 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${change > 0 ? '+' : ''}${change}</div>
+              </div>`;
+            }).join('')}
+          </div>
+          <canvas id="evo-measure-chart" width="400" height="160" style="margin-top:12px"></canvas>
+        </div>`;
+    }
+    
+    // Photo timeline
+    if (photos.length >= 2) {
+      photoHtml = `
+        <div class="bw-chart-container">
+          <h4>📸 Línea de Tiempo de Fotos</h4>
+          <div class="photo-timeline" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px">
+            ${photos.slice().reverse().slice(0, 6).map(p => `
+              <div style="min-width:80px;text-align:center">
+                <img src="${p.base64}" style="width:80px;height:106px;object-fit:cover;border-radius:8px;border:1px solid var(--color-border)">
+                <div style="font-size:0.55rem;color:var(--color-text-tertiary);margin-top:4px">${new Date(p.date).toLocaleDateString('es-ES', {day:'numeric',month:'short'})}</div>
+                ${p.weight ? `<div style="font-size:0.55rem;color:var(--color-accent)">${p.weight}${user.units}</div>` : ''}
+              </div>
+            `).join('')}
+            ${photos.length > 6 ? `<div style="min-width:40px;display:flex;align-items:center;font-size:0.7rem;color:var(--color-text-tertiary)">+${photos.length - 6}</div>` : ''}
+          </div>
+        </div>`;
+    }
+    
+    // Workout volume trend (last 10)
+    let workoutHtml = '';
+    if (workouts.length >= 2) {
+      workoutHtml = `
+        <div class="bw-chart-container">
+          <h4>🏋️ Volumen de Entrenamiento</h4>
+          <canvas id="evo-vol-chart" width="400" height="120"></canvas>
+        </div>`;
+    }
+    
+    Modal.show(`
+      <div style="overflow-y:auto;max-height:75vh">
+        ${statsHtml}
+        ${weightHtml}
+        ${measureHtml}
+        ${workoutHtml}
+        ${photoHtml}
+        ${bwData.length < 1 && measurements.length < 1 && photos.length < 1 ? '<div style="text-align:center;padding:32px;color:var(--color-text-tertiary)">Comienza registrando peso, medidas o fotos para ver tu evolución 📊</div>' : ''}
+      </div>
+    `, { title: '📈 Evolución Corporal' });
+    
+    setTimeout(() => {
+      if (bwData.length >= 2) this.drawEvoWeightChart(bwData);
+      if (measurements.length >= 2) this.drawEvoMeasureChart(measurements);
+      if (workouts.length >= 2) this.drawEvoVolChart(workouts);
+    }, 300);
+  },
+
+  drawEvoWeightChart(data) {
+    const canvas = document.getElementById('evo-weight-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width - 32;
+    canvas.height = 160;
+    
+    const padding = { top: 10, right: 10, bottom: 20, left: 40 };
+    const w = canvas.width - padding.left - padding.right;
+    const h = canvas.height - padding.top - padding.bottom;
+    
+    const weights = data.map(d => d.weight);
+    const minW = Math.min(...weights) * 0.98;
+    const maxW = Math.max(...weights) * 1.02;
+    const range = maxW - minW || 1;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = '#A3FF12';
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    
+    data.forEach((d, i) => {
+      const x = padding.left + (i / (data.length - 1)) * w;
+      const y = padding.top + h - ((d.weight - minW) / range) * h;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    
+    // Points
+    data.forEach((d, i) => {
+      const x = padding.left + (i / (data.length - 1)) * w;
+      const y = padding.top + h - ((d.weight - minW) / range) * h;
+      ctx.beginPath();
+      ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#A3FF12';
+      ctx.fill();
+    });
+  },
+
+  drawEvoMeasureChart(data) {
+    const canvas = document.getElementById('evo-measure-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width - 32;
+    canvas.height = 160;
+    
+    const keys = ['chest', 'waist', 'arm', 'thigh'];
+    const colors = ['#60A5FA', '#FBBF24', '#FB7185', '#A78BFA'];
+    const labels = ['Pecho', 'Cintura', 'Brazo', 'Muslo'];
+    
+    const padding = { top: 10, right: 10, bottom: 20, left: 35 };
+    const w = canvas.width - padding.left - padding.right;
+    const h = canvas.height - padding.top - padding.bottom;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    keys.forEach((key, ki) => {
+      const vals = data.map(m => parseFloat(m[key]) || 0).filter(v => v > 0);
+      if (vals.length < 2) return;
+      const min = Math.min(...vals) * 0.95;
+      const max = Math.max(...vals) * 1.05;
+      const range = max - min || 1;
+      
+      ctx.beginPath();
+      ctx.strokeStyle = colors[ki];
+      ctx.lineWidth = 1.5;
+      
+      vals.forEach((v, i) => {
+        const x = padding.left + (i / (vals.length - 1)) * w;
+        const y = padding.top + h - ((v - min) / range) * h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+    
+    // Legend
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'left';
+    keys.forEach((key, ki) => {
+      const vals = data.map(m => parseFloat(m[key]) || 0).filter(v => v > 0);
+      if (vals.length < 2) return;
+      ctx.fillStyle = colors[ki];
+      ctx.fillRect(5, 5 + ki * 14, 8, 8);
+      ctx.fillText(labels[ki], 16, 12 + ki * 14);
+    });
+  },
+
+  drawEvoVolChart(workouts) {
+    const canvas = document.getElementById('evo-vol-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width - 32;
+    canvas.height = 120;
+    
+    const padding = { top: 5, right: 10, bottom: 18, left: 35 };
+    const w = canvas.width - padding.left - padding.right;
+    const h = canvas.height - padding.top - padding.bottom;
+    
+    const recent = workouts.slice(0, 10).reverse();
+    const vols = recent.map(wk => Storage.getTotalVolume(wk));
+    const maxVol = Math.max(...vols, 1) * 1.1;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const barW = Math.min(w / vols.length * 0.7, 30);
+    const gap = w / vols.length;
+    
+    ctx.fillStyle = '#A3FF12';
+    vols.forEach((v, i) => {
+      const barH = (v / maxVol) * h;
+      const x = padding.left + gap * i + (gap - barW) / 2;
+      const y = padding.top + h - barH;
+      ctx.fillRect(x, y, barW, barH);
+    });
   },
 
   deleteMeasurement(idx) {
