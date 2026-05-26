@@ -530,6 +530,149 @@ export const PRCelebration = {
   }
 };
 
+// --- Badge Celebration (for new achievements) ---
+export const BadgeCelebration = {
+  el: null, timeout: null,
+
+  init() { this.el = document.getElementById('badge-celebration'); },
+
+  show(badges) {
+    if (!this.el || !badges || badges.length === 0) return;
+    
+    // Determine highest difficulty for vibe intensity
+    const badgeIds = badges.map(b => b.id);
+    const mediumIds = ['dedication_200','streak_30','volume_mountain','pr_collector','night_king','diverse_50'];
+    const hardIds = ['dedication_500','streak_120','volume_titan','pr_legend','year_warrior'];
+    
+    const hasHard = badges.some(b => hardIds.includes(b.id));
+    const hasMedium = badges.some(b => mediumIds.includes(b.id));
+    
+    let difficulty = 'easy';
+    let confettiDuration = 3000;
+    let title = '🏅 Nuevo Logro';
+    let vibeClass = '';
+    
+    if (hasHard) {
+      difficulty = 'hard';
+      confettiDuration = 5000;
+      title = '👑 ¡LOGRO ÉPICO!';
+      vibeClass = 'badge-celebration-hard';
+    } else if (hasMedium) {
+      difficulty = 'medium';
+      confettiDuration = 4000;
+      title = '🔥 ¡Logro Conseguido!';
+      vibeClass = 'badge-celebration-medium';
+    }
+    
+    // Fire confetti with appropriate intensity
+    Confetti.fire(confettiDuration);
+    
+    // Play sound
+    playBadgeSound(difficulty);
+    
+    // Vibrate based on difficulty
+    if (navigator.vibrate) {
+      if (hasHard) navigator.vibrate([200, 100, 200, 100, 200, 100, 500]);
+      else if (hasMedium) navigator.vibrate([150, 80, 150, 80, 300]);
+      else navigator.vibrate([100, 50, 100, 50, 200]);
+    }
+    
+    // Build celebration HTML — show each badge with its difficulty-themed animation
+    const badgesHtml = badges.map((b, i) => {
+      const badgeDiffClass = hardIds.includes(b.id) ? 'badge-card-hard' : 
+                             mediumIds.includes(b.id) ? 'badge-card-medium' : 'badge-card-easy';
+      const delay = i * 200;
+      return `
+        <div class="badge-celebration-card ${badgeDiffClass}" style="animation-delay:${delay}ms">
+          <div class="badge-celebration-icon">${b.icon}</div>
+          <div class="badge-celebration-info">
+            <div class="badge-celebration-name">${b.title}</div>
+            <div class="badge-celebration-desc">${b.desc}</div>
+          </div>
+          ${hardIds.includes(b.id) ? '<div class="badge-sparkle">✨</div>' : ''}
+          ${mediumIds.includes(b.id) ? '<div class="badge-sparkle badge-sparkle-sm">⭐</div>' : ''}
+        </div>
+      `;
+    }).join('');
+    
+    this.el.innerHTML = `
+      <div class="badge-celebration-overlay ${vibeClass}">
+        <div class="badge-celebration-container">
+          <div class="badge-celebration-header">
+            <div class="badge-celebration-title">${title}</div>
+            <div class="badge-celebration-sub">${badges.length} ${badges.length === 1 ? 'logro desbloqueado' : 'logros desbloqueados'}</div>
+          </div>
+          ${badgesHtml}
+          <button class="btn btn-primary btn-lg btn-block badge-celebration-btn" onclick="BadgeCelebration.hide()">
+            ${hasHard ? '🔥 ¡SOY UNA LEYENDA!' : hasMedium ? '💪 ¡Sigo imparable!' : '✅ Continuar'}
+          </button>
+        </div>
+      </div>
+    `;
+    
+    this.el.classList.add('active');
+    
+    if (this.timeout) clearTimeout(this.timeout);
+    // Auto-hide after confettiDuration + buffer
+    this.timeout = setTimeout(() => {
+      if (this.el.classList.contains('active')) this.hide();
+    }, confettiDuration + 4000);
+  },
+  
+  hide() {
+    if (this.el) {
+      this.el.classList.remove('active');
+      this.el.innerHTML = '';
+    }
+  }
+};
+
+// --- Badge Sound Effects via Web Audio API ---
+export function playBadgeSound(difficulty = 'easy') {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
+    
+    const playNote = (freq, startDelay, duration, type = 'sine', gainVal = 0.3) => {
+      setTimeout(() => {
+        if (ctx.state !== 'running' && ctx.state !== 'suspended') return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(gainVal, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + duration);
+      }, startDelay);
+    };
+    
+    if (difficulty === 'hard') {
+      // Epic fanfare: ascending arpeggio
+      playNote(523, 0, 0.3, 'square', 0.2);      // C5
+      playNote(659, 150, 0.3, 'square', 0.2);     // E5
+      playNote(784, 300, 0.3, 'square', 0.2);     // G5
+      playNote(1047, 450, 0.8, 'sine', 0.3);      // C6 sustained
+      playNote(1319, 450, 0.8, 'sine', 0.15);     // E6 harmony
+    } else if (difficulty === 'medium') {
+      // Ascending major chord
+      playNote(392, 0, 0.25, 'triangle', 0.25);   // G4
+      playNote(494, 100, 0.25, 'triangle', 0.25);  // B4
+      playNote(587, 200, 0.4, 'sine', 0.3);        // D5
+    } else {
+      // Simple happy ding
+      playNote(880, 0, 0.15, 'sine', 0.2);         // A5 short
+      playNote(1109, 80, 0.2, 'sine', 0.2);        // C#5
+    }
+  } catch (e) {
+    // Silently fail — audio is not critical
+  }
+}
+
 export const LineChart = {
   render(data, options = {}) {
     if (!data || data.length === 0) return '';

@@ -3,6 +3,7 @@
 // ============================================
 
 import { Storage } from './storage.js';
+import { BadgeCelebration } from './components.js';
 
 export const Gamification = {
   // Configuración de Experiencia (XP)
@@ -214,6 +215,14 @@ export const Gamification = {
   showRewardsModal(rewards) {
     if (!rewards.xpEarned && !rewards.newLevel && rewards.newBadges.length === 0) return;
 
+    // Show BadgeCelebration first if there are new badges (with confetti, sounds, animations)
+    if (rewards.newBadges.length > 0) {
+      setTimeout(() => {
+        BadgeCelebration.show(rewards.newBadges);
+      }, 800);
+    }
+
+    // Also show the XP/level rewards modal
     let html = `
       <div style="text-align:center">
         <div style="font-size:3rem;margin-bottom:8px">✨</div>
@@ -235,7 +244,7 @@ export const Gamification = {
     }
 
     if (rewards.newBadges.length > 0) {
-      html += `<div style="font-weight:bold;margin-bottom:8px;text-align:left">Nuevas Insignias:</div>`;
+      html += `<div style="font-weight:bold;margin-bottom:8px;text-align:left;color:var(--color-accent)">🏆 Logros desbloqueados</div>`;
       rewards.newBadges.forEach(b => {
         html += `
           <div style="display:flex;align-items:center;background:var(--color-bg-input);border-radius:8px;padding:12px;margin-bottom:8px;text-align:left">
@@ -253,8 +262,7 @@ export const Gamification = {
 
     setTimeout(() => {
       Modal.show(html, { title: 'Recompensas RPG' });
-      // Vibración de celebración
       if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 300]);
-    }, 1000); // 1 segundo después del PR normal si hubo
+    }, 1500);
   }
 };
