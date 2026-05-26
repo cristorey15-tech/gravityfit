@@ -106,6 +106,7 @@ export const WorkoutScreen = {
                 <span class="unit-opt ${exUnit === 'lbs' ? 'active' : ''}" onclick="WorkoutScreen.setExUnit(${exIdx},'lbs')">LBS</span>
               </div>
               <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.showPlatesModal(${exIdx})" title="Calculadora de discos" style="font-size:1rem;opacity:0.6;padding:2px">🧮</button>
+              <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.replaceExercise(${exIdx})" title="Reemplazar" style="padding:2px;opacity:0.6">🔄</button>
               <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.removeExercise(${exIdx})" title="Eliminar" style="padding:2px">🗑️</button>
             </div>
           </div>
@@ -324,6 +325,7 @@ export const WorkoutScreen = {
 
   // Start a new empty workout
   startEmpty() {
+    this._replaceTargetIdx = null;
     this.activeWorkout = {
       name: 'Entrenamiento',
       routineId: null,
@@ -340,6 +342,7 @@ export const WorkoutScreen = {
   startFromRoutine(routineId) {
     const routine = Storage.getRoutine(routineId);
     if (!routine) return;
+    this._replaceTargetIdx = null;
     const user = Storage.getUser();
     this.activeWorkout = {
       name: routine.name,
@@ -473,15 +476,37 @@ export const WorkoutScreen = {
 
   pickExercise(exerciseId) {
     const user = Storage.getUser();
-    this.activeWorkout.exercises.push({
-      exerciseId,
-      unit: user.units,
-      sets: [{ weight: null, reps: null, type: 'normal', completed: false }]
-    });
+    
+    if (this._replaceTargetIdx !== undefined && this._replaceTargetIdx !== null) {
+      // Replace mode: keep sets, change exercise
+      const target = this.activeWorkout.exercises[this._replaceTargetIdx];
+      target.exerciseId = exerciseId;
+      target.unit = user.units;
+      // Keep existing sets but reset completion
+      target.sets.forEach(s => s.completed = false);
+      delete target.timeMode;
+      delete target.notes;
+      delete target.rpe;
+      this._replaceTargetIdx = null;
+      Toast.show('Ejercicio reemplazado');
+    } else {
+      // Normal mode: add new exercise
+      this.activeWorkout.exercises.push({
+        exerciseId,
+        unit: user.units,
+        sets: [{ weight: null, reps: null, type: 'normal', completed: false }]
+      });
+      Toast.show('Ejercicio agregado');
+    }
     this.save();
     Modal.hide();
     this.render();
-    Toast.show('Ejercicio agregado');
+  },
+
+  replaceExercise(exIdx) {
+    // Guardar referencia para reemplazar después
+    this._replaceTargetIdx = exIdx;
+    this.showExercisePicker();
   },
 
   removeExercise(exIdx) {
@@ -684,6 +709,10 @@ export const WorkoutScreen = {
       totalVolume: Storage.getTotalVolume(this.activeWorkout),
       heartRateData: hrSummary
     };
+    
+    // Check if we should ask to update the original routine
+    const hadChanges = workout.routineId && this._hasRoutineChanges(workout);
+    
     Storage.addWorkout(workout);
     Storage.clearActiveWorkout();
     this.activeWorkout = null;
@@ -702,7 +731,7 @@ export const WorkoutScreen = {
       this.lastRewards = window.Gamification.processWorkout(workout, 0);
     }
     
-    this.showSummaryModal(workout);
+    this.showSummaryModal(workout, hadChanges);
     if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
   },
 
@@ -778,7 +807,45 @@ export const WorkoutScreen = {
     }
   },
 
-  showSummaryModal(w) {
+  _hasRoutineChanges(workout) {
+    const routine = Storage.getRoutine(workout.routineId);
+    if (!routine) return false;
+    const original = routine.exercises || [];
+    const current = workout.exercises || [];
+    // Check if exercise count differs
+    if (original.length !== current.length) return true;
+    // Check if any exercise IDs changed
+    for (let i = 0; i < original.length; i++) {
+      if (original[i].exerciseId !== current[i].exerciseId) return true;
+    }
+    // Check if sets/reps changed
+    for (let i = 0; i < original.length; i++) {
+      if ((original[i].sets || 0) !== (current[i].sets || []).length) return true;
+      if (original[i].reps && current[i].sets[0]) {
+        const curReps = current[i].sets[0].reps || 0;
+        if (original[i].reps !== curReps) return true;
+      }
+    }
+    return false;
+  },
+
+  updateRoutineFromWorkout() {
+    const routineId = this._pendingRoutineUpdate;
+    if (!routineId) return;
+    const workout = Storage.getWorkout(this._pendingWorkoutId);
+    if (!workout) return;
+    const exercises = workout.exercises.map(ex => ({
+      exerciseId: ex.exerciseId,
+      sets: ex.sets.length,
+      reps: ex.sets[0]?.reps || 10,
+      restSeconds: 90
+    }));
+    Storage.updateRoutine(routineId, { exercises });
+    Toast.show('✅ Rutina actualizada con los cambios', 'success');
+    Modal.hide();
+  },
+
+  showSummaryModal(w, hadChanges) {
     const user = Storage.getUser();
     const html = `
       <div id="share-card-content" style="background:var(--color-surface);padding:24px;border-radius:16px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);margin-bottom:16px;position:relative;overflow:hidden">
@@ -823,6 +890,11 @@ export const WorkoutScreen = {
         </div>
       </div>
       
+      ${hadChanges ? `
+      <div style="margin-bottom:12px;padding:12px;background:var(--color-accent-dim);border-radius:var(--radius-md);text-align:center">
+        <p style="font-size:0.8125rem;color:var(--color-accent);font-weight:var(--font-weight-semibold);margin-bottom:8px">🔄 Detectamos cambios en los ejercicios</p>
+        <button class="btn btn-primary btn-sm" onclick="WorkoutScreen._pendingRoutineUpdate='${w.routineId}';WorkoutScreen._pendingWorkoutId='${w.id}';WorkoutScreen.updateRoutineFromWorkout()">Actualizar Rutina Original</button>
+      </div>` : ''}
       <div style="display:flex;gap:12px">
         <button class="btn btn-secondary flex-1" onclick="Modal.hide(); if(typeof window.Gamification !== 'undefined' && window.WorkoutScreen.lastRewards && (window.WorkoutScreen.lastRewards.newLevel || window.WorkoutScreen.lastRewards.newBadges.length > 0)) { window.Gamification.showRewardsModal(window.WorkoutScreen.lastRewards); } else { window.App.navigate('home'); }">Ir a Inicio</button>
         <button class="btn btn-primary flex-1" onclick="WorkoutScreen.shareWorkout()">Compartir 📸</button>

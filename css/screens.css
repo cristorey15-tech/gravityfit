@@ -508,6 +508,47 @@
   animation: setFlash 0.4s ease-out;
 }
 
+/* --- Rest Day Overlay --- */
+.rest-day-overlay {
+  position: fixed; inset: 0; z-index: var(--z-max);
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(12px);
+  display: none;
+  align-items: center; justify-content: center;
+  animation: fadeIn var(--transition-base);
+}
+.rest-day-overlay.active { display: flex; }
+.rest-day-content {
+  text-align: center;
+  padding: var(--space-8);
+  animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.rest-day-icon {
+  font-size: 5rem;
+  margin-bottom: var(--space-4);
+  animation: splashFloat 3s ease-in-out infinite;
+}
+.rest-day-title {
+  font-size: var(--font-size-3xl);
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+.rest-day-subtitle {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  max-width: 300px;
+  margin: 0 auto var(--space-8);
+}
+.rest-day-reminder {
+  margin-top: var(--space-6);
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+  animation: pulse 2s ease-in-out infinite;
+}
+
 /* --- Skeleton Loading (C2) --- */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

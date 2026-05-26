@@ -334,7 +334,7 @@ export const Onboarding = {
 
   init() { this.overlay = document.getElementById('onboarding-overlay'); },
 
-  shouldShow() { return !localStorage.getItem('gf_user'); },
+  shouldShow() { return !Storage._get(Storage.KEYS.USER); },
 
   show() {
     this.step = 0;

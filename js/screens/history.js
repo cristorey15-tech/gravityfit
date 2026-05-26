@@ -507,21 +507,46 @@ export const HistoryScreen = {
   // ==========================================
   // WORKOUT DETAIL — with Repeat button
   // ==========================================
-  showWorkoutDetail(id) {
+  showWorkoutDetail(id, editing = false) {
     const w = Storage.getWorkout(id);
     if (!w) return;
     const user = Storage.getUser();
     const vol = Storage.getTotalVolume(w);
     let currentSupersetId = null;
+    
+    if (editing) {
+      this._editWorkoutId = id;
+    }
+    
     let exHtml = (w.exercises || []).map((ex, i) => {
       const d = Storage.getExercise(ex.exerciseId);
       const name = d ? d.name : ex.exerciseId;
-      const setsHtml = (ex.sets || []).map((s, idx) => {
-        const check = s.completed ? '✅' : '⬜';
-        return `<div style="display:flex;gap:12px;padding:4px 0;font-size:0.8125rem;color:var(--color-text-secondary)">
-          <span>${check}</span><span>Serie ${idx + 1}</span><span>${s.weight || 0} ${user.units}</span><span>× ${s.reps || 0}</span>
-        </div>`;
-      }).join('');
+      
+      let setsHtml;
+      if (editing) {
+        setsHtml = (ex.sets || []).map((s, idx) => {
+          const check = s.completed ? '✅' : '⬜';
+          return `<div style="display:flex;gap:8px;padding:4px 0;font-size:0.8125rem;align-items:center">
+            <span>${check}</span>
+            <span style="width:40px">Serie ${idx + 1}</span>
+            <input type="number" class="input input-number" value="${s.weight || ''}" style="width:60px" placeholder="0" onchange="HistoryScreen._editSet(${i},${idx},'weight',this.value)" inputmode="decimal">
+            <span>×</span>
+            <input type="number" class="input input-number" value="${s.reps || ''}" style="width:60px" placeholder="0" onchange="HistoryScreen._editSet(${i},${idx},'reps',this.value)" inputmode="numeric">
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="checkbox" ${s.completed ? 'checked' : ''} onchange="HistoryScreen._editSet(${i},${idx},'completed',this.checked)">
+              Hecho
+            </label>
+          </div>`;
+        }).join('');
+      } else {
+        setsHtml = (ex.sets || []).map((s, idx) => {
+          const check = s.completed ? '✅' : '⬜';
+          return `<div style="display:flex;gap:12px;padding:4px 0;font-size:0.8125rem;color:var(--color-text-secondary)">
+            <span>${check}</span><span>Serie ${idx + 1}</span><span>${s.weight || 0} ${user.units}</span><span>× ${s.reps || 0}</span>
+          </div>`;
+        }).join('');
+      }
+      
       const notesHtml = ex.notes ? `<div style="margin-top:4px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px;font-size:0.75rem;color:var(--color-text-secondary)">📝 ${ex.notes}</div>` : '';
       const rpeHtml = ex.rpe ? `<span style="font-size:0.75rem;color:var(--color-warning);margin-left:8px">RPE ${ex.rpe}</span>` : '';
       
@@ -569,8 +594,14 @@ export const HistoryScreen = {
       ${hrHtml}
       ${exHtml}
       <div style="display:flex;gap:8px;margin-top:8px">
+        ${editing ? `
+        <button class="btn btn-primary flex-1" onclick="HistoryScreen.saveEditWorkout('${id}')">💾 Guardar Cambios</button>
+        <button class="btn btn-secondary flex-1" onclick="HistoryScreen.showWorkoutDetail('${id}')">Cancelar</button>
+        ` : `
         <button class="btn btn-primary flex-1" onclick="HistoryScreen.repeatWorkout('${id}')">🔄 Repetir</button>
+        <button class="btn btn-secondary flex-1" onclick="HistoryScreen.showWorkoutDetail('${id}', true)">✏️ Editar</button>
         <button class="btn btn-danger flex-1" onclick="HistoryScreen.confirmDeleteWorkout('${id}')">🗑️ Eliminar</button>
+        `}
       </div>
     `, { title: w.name || 'Entrenamiento' });
   },

@@ -32,6 +32,16 @@
     };
   </script>
 
+  <!-- Splash Screen -->
+  <div id="splash-screen">
+    <div class="splash-content">
+      <div class="splash-icon">🏋️</div>
+      <div class="splash-title">GravityFit</div>
+      <div class="splash-subtitle">Workout Tracker</div>
+      <div class="splash-loader"><div class="splash-loader-bar"></div></div>
+    </div>
+  </div>
+
   <div id="app">
     <!-- Screens -->
     <div id="screen-home" class="screen active"></div>
@@ -82,6 +92,17 @@
 
     <!-- Onboarding Overlay -->
     <div class="onboarding-overlay" id="onboarding-overlay"></div>
+
+    <!-- Rest Day Overlay -->
+    <div class="rest-day-overlay" id="rest-day-overlay">
+      <div class="rest-day-content">
+        <div class="rest-day-icon">💤</div>
+        <div class="rest-day-title">Día de Descanso</div>
+        <div class="rest-day-subtitle">El descanso también es parte del entrenamiento. ¡Recupérate y vuelve más fuerte!</div>
+        <button class="btn btn-primary btn-lg" onclick="App.dismissRestDay()">Entendido 💪</button>
+        <div class="rest-day-reminder">🏆 Tu racha se mantiene</div>
+      </div>
+    </div>
 
     <!-- PWA Install Banner -->
     <div class="pwa-install-banner" id="pwa-install-banner">

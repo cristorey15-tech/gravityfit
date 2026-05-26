@@ -19,6 +19,35 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: 'index.html',
+      output: {
+        manualChunks(id) {
+          // Split screen modules into separate chunks
+          if (id.includes('/js/screens/')) {
+            return 'screens';
+          }
+          if (id.includes('/js/components.js')) {
+            return 'components';
+          }
+          if (id.includes('/js/storage.js')) {
+            return 'storage';
+          }
+          if (id.includes('/js/bluetooth.js')) {
+            return 'bluetooth';
+          }
+          if (id.includes('/js/gamification.js')) {
+            return 'gamification';
+          }
+          if (id.includes('/js/ai-coach.js')) {
+            return 'ai-coach';
+          }
+          if (id.includes('/js/sync.js')) {
+            return 'sync';
+          }
+          if (id.includes('/src/')) {
+            return 'src';
+          }
+        },
+      },
     },
   },
   resolve: {
@@ -58,20 +87,66 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,json,svg,ico,png}'],
+        globPatterns: ['**/*.{js,css,html,json,svg,ico,png,woff2}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'exercise-gifs',
+              cacheName: 'external-assets',
               expiration: {
                 maxEntries: 500,
                 maxAgeSeconds: 30 * 24 * 60 * 60,
               },
             },
           },
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-stylesheets',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-webfonts',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/www\.gstatic\.com\/firebasejs\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'firebase-sdk',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 7 * 24 * 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/html2canvas\.hertzen\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'html2canvas',
+              expiration: {
+                maxEntries: 3,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+            },
+          },
         ],
+        navigateFallback: '/index.html',
+        navigateFallbackAllowlist: [/^(?!\/(api|__)).*/],
       },
     }),
   ],

@@ -36,6 +36,10 @@ export const App = {
     Confetti.init();
     PRCelebration.init();
 
+    // Hide splash screen
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.classList.add('hidden');
+
     // Apply color theme
     const user = Storage.getUser();
     if (user.theme) {
@@ -70,6 +74,18 @@ export const App = {
         RestTimer.handleVisibilityChange();
       }
     });
+
+    // Global haptic feedback on button clicks
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn, .nav-item, .chip, .set-check');
+      if (btn && navigator.vibrate) navigator.vibrate(8);
+    }, { passive: true });
+
+    // Global min-haptic on touch (mobile)
+    document.addEventListener('touchstart', (e) => {
+      const interactive = e.target.closest('.btn, .nav-item, .chip, .set-check, .exercise-list-item, .routine-card');
+      if (interactive && navigator.vibrate) navigator.vibrate(5);
+    }, { passive: true });
   },
 
   navigate(screenId, updateHash = true) {
@@ -172,8 +188,13 @@ export const App = {
   markRestDay() {
     Storage.recordProgramWorkout('rest');
     Confetti.fire(2000);
-    Toast.show('¡Día de descanso completado! 💤');
+    const overlay = document.getElementById('rest-day-overlay');
+    if (overlay) overlay.classList.add('active');
     this.navigate('home', false);
+  },
+  dismissRestDay() {
+    const overlay = document.getElementById('rest-day-overlay');
+    if (overlay) overlay.classList.remove('active');
   }
 };
 

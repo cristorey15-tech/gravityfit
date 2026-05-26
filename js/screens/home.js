@@ -51,7 +51,7 @@ export const HomeScreen = {
           </div>
         </div>
 
-        <div style="display:flex; gap:12px; margin-bottom:16px;">
+        <div style="display:flex; gap:12px; margin-bottom:12px;">
           <button class="home-start-btn" style="flex:1; margin-bottom:0;" onclick="App.startEmptyWorkout()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Libre
@@ -60,6 +60,8 @@ export const HomeScreen = {
             <span style="font-size:1.2rem">🧠</span> AI Coach
           </button>
         </div>
+        ${this.renderQuickActions(routines)}
+        
 
         ${this.renderActiveProgram()}
 
@@ -221,6 +223,48 @@ export const HomeScreen = {
     const days = Math.floor(hours / 24);
     if (days === 1) return 'ayer';
     return `hace ${days} días`;
+  },
+
+  renderQuickActions(routines) {
+    const allWorkouts = Storage.getWorkouts();
+    const lastWorkout = allWorkouts[0] || null;
+    const program = Storage.getActiveProgram();
+    
+    let html = '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">';
+    
+    // Last routine quick start
+    if (lastWorkout && lastWorkout.routineId) {
+      const lastRoutine = Storage.getRoutine(lastWorkout.routineId);
+      if (lastRoutine) {
+        html += `
+          <button class="chip ${lastRoutine ? 'active' : ''}" onclick="App.startRoutineWorkout('${lastRoutine.id}')">
+            🔄 ${lastRoutine.name}
+          </button>`;
+      }
+    }
+    
+    // Active program quick start
+    if (program) {
+      const next = Storage.getNextProgramWorkout(program);
+      if (next && next.routine && next.routine.id !== 'rest' && next.isToday) {
+        html += `
+          <button class="chip active" onclick="App.startRoutineWorkout('${next.routine.id}')">
+            📅 ${next.routine.name}
+          </button>`;
+      }
+    }
+    
+    // Favorite routine quick starts (top 3)
+    const favRoutines = routines.filter(r => r.isFavorite).slice(0, 3);
+    favRoutines.forEach(r => {
+      html += `
+        <button class="chip" onclick="App.startRoutineWorkout('${r.id}')">
+          ⭐ ${r.name}
+        </button>`;
+    });
+    
+    html += '</div>';
+    return html;
   },
 
   renderActiveProgram() {

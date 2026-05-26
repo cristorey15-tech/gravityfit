@@ -227,16 +227,24 @@ export const Storage = {
     });
     return vol;
   },
+  _localDateStr(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  },
+
   getStreak() {
     const workouts = this.getWorkouts().sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt));
     if (!workouts.length) return 0;
     let streak = 0;
     let current = new Date();
     current.setHours(0, 0, 0, 0);
+    const todayStr = this._localDateStr(current);
     const dayMs = 86400000;
     for (let i = 0; i < 365; i++) {
-      const dayStr = current.toISOString().split('T')[0];
-      const hasWorkout = workouts.some(w => w.finishedAt && w.finishedAt.split('T')[0] === dayStr);
+      const dayStr = i === 0 ? todayStr : this._localDateStr(current);
+      const hasWorkout = workouts.some(w => w.finishedAt && this._localDateStr(new Date(w.finishedAt)) === dayStr);
       if (hasWorkout) { streak++; }
       else if (i > 0) { break; }
       current = new Date(current.getTime() - dayMs);
