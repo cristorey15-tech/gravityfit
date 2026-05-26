@@ -21,26 +21,11 @@ export default defineConfig({
       input: 'index.html',
       output: {
         manualChunks(id) {
-          // Split screens (heaviest modules)
-          if (id.includes('/js/screens/')) {
-            return 'screens';
-          }
-          // Keep core + src together (they have circular deps)
-          if (id.includes('/js/storage.js') || id.includes('/js/components.js') || id.includes('/src/')) {
-            return 'core';
-          }
-          // Split standalone features
-          if (id.includes('/js/bluetooth.js')) {
-            return 'bluetooth';
-          }
-          if (id.includes('/js/gamification.js')) {
-            return 'gamification';
-          }
-          if (id.includes('/js/ai-coach.js')) {
-            return 'ai-coach';
-          }
-          if (id.includes('/js/sync.js')) {
-            return 'sync';
+          // All app code in one chunk to avoid circular deps between
+          // core ↔ gamification/bluetooth/sync/ai-coach/screens
+          if (id.indexOf('/js/') !== -1 || id.indexOf('\\js\\') !== -1 ||
+              id.indexOf('/src/') !== -1 || id.indexOf('\\src\\') !== -1) {
+            return 'app';
           }
         },
       },
