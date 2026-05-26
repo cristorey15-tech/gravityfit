@@ -65,7 +65,10 @@ export const RoutinesScreen = {
               <span class="folder-name">${folder}</span>
               <span class="folder-count">${list.length}</span>
             </div>
-            <span class="folder-chevron">▼</span>
+            <div style="display:flex;align-items:center;gap:4px">
+              ${isDefault ? '' : `<button class="btn btn-ghost btn-icon folder-rename-btn" onclick="event.stopPropagation();RoutinesScreen.showRenameFolder('${folder}')" title="Renombrar carpeta">✏️</button>`}
+              <span class="folder-chevron">▼</span>
+            </div>
           </div>
           <div class="folder-content" onclick="event.stopPropagation()">
             ${list.map(r => this.renderRoutineCard(r)).join('')}
@@ -424,6 +427,44 @@ export const RoutinesScreen = {
   removeFolderFromRoutine(id) {
     Storage.updateRoutine(id, { folder: '' });
     Toast.show('📁 Carpeta eliminada');
+    Modal.hide();
+    this.render();
+  },
+
+  // Rename folder
+  showRenameFolder(oldName) {
+    Modal.show(`
+      <p style="margin-bottom:16px;color:var(--color-text-secondary);font-size:0.875rem">
+        Renombrar carpeta <strong>${oldName}</strong> — se actualizarán todas las rutinas que la usan.
+      </p>
+      <div class="input-group" style="margin-bottom:16px">
+        <label class="input-label">Nuevo nombre</label>
+        <input class="input" id="rename-folder-input" value="${oldName}" placeholder="Ej: Push/Pull/Legs" autofocus>
+      </div>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+        <button class="btn btn-primary flex-1" onclick="RoutinesScreen.saveRenameFolder('${oldName}')">Guardar</button>
+      </div>
+    `, { title: '✏️ Renombrar Carpeta', center: true });
+    
+    setTimeout(() => {
+      const input = document.getElementById('rename-folder-input');
+      if (input) { input.focus(); input.select(); }
+    }, 200);
+  },
+
+  saveRenameFolder(oldName) {
+    const newName = document.getElementById('rename-folder-input')?.value.trim();
+    if (!newName) { Toast.show('Ingresa un nombre', 'warning'); return; }
+    if (newName === oldName) { Modal.hide(); return; }
+    
+    const routines = Storage.getRoutines();
+    routines.forEach(r => {
+      if (r.folder === oldName) r.folder = newName;
+    });
+    Storage.saveRoutines(routines);
+    
+    Toast.show(`📁 Carpeta renombrada a "${newName}"`);
     Modal.hide();
     this.render();
   },

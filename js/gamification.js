@@ -277,6 +277,7 @@ export const Gamification = {
     
     // Si está cambiando la semana, resetear contadores semanales
     if (user.weeklyChallenges.weekStart !== currentWeek) {
+      if (!user.stats) user.stats = {};
       user.stats.weeklyPRs = 0;
     }
     

@@ -404,6 +404,9 @@
   user-select:none;
 }
 .folder-header:hover { background:var(--color-bg-card-hover); }
+.folder-rename-btn { opacity:0; transition:opacity 0.2s; font-size:0.8rem; padding:2px 4px; }
+.folder-header:hover .folder-rename-btn { opacity:0.6; }
+.folder-rename-btn:hover { opacity:1 !important; }
 .folder-header-left { display:flex; align-items:center; gap:var(--space-3); }
 .folder-name {
   font-size:var(--font-size-base); font-weight:var(--font-weight-semibold);
