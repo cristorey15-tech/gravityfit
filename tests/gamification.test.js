@@ -9,6 +9,13 @@ import { Storage } from '../js/storage.js';
 describe('Gamification', () => {
   beforeEach(() => {
     Storage._state = {};
+    // Mock Toast for weekly challenges that call Toast.show()
+    if (!global.window.Toast) {
+      global.window.Toast = { show: () => {} };
+    }
+    if (!global.window.Modal) {
+      global.window.Modal = { show: () => {}, hide: () => {} };
+    }
   });
 
   describe('Level math', () => {

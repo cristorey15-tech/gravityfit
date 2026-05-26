@@ -308,7 +308,7 @@ export const HomeScreen = {
           <div style="font-size:0.7rem;color:var(--color-text-tertiary)">Peso Corporal</div>
           <div style="display:flex;align-items:baseline;gap:6px">
             <span style="font-size:1.25rem;font-weight:700;color:var(--color-text)">${last.weight}</span>
-            <span style="font-size:0.75rem;color:var(--color-text-secondary)">${user.units}</span>
+            <span style="font-size:0.75rem;color:var(--color-text-secondary)">kg</span>
             <span style="font-size:0.7rem;font-weight:600;color:${diffColor}">${diffStr}</span>
           </div>
         </div>

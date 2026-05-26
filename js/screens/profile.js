@@ -237,7 +237,7 @@ export const ProfileScreen = {
               <span class="settings-item-label">Peso Corporal</span>
             </div>
             <span class="settings-item-value" id="profile-body-weight">
-              ${user.bodyWeight && user.bodyWeight.length ? user.bodyWeight[user.bodyWeight.length-1].weight + user.units : '-'}
+              ${user.bodyWeight && user.bodyWeight.length ? user.bodyWeight[user.bodyWeight.length-1].weight + 'kg' : '-'}
             </span>
           </div>
           <div class="settings-item" onclick="ProfileScreen.showBodyMeasurements()">
@@ -430,7 +430,7 @@ export const ProfileScreen = {
       <div style="text-align:center">
         ${canvasHtml}
         ${statsHtml}
-        <label style="display:block;margin-bottom:8px;font-size:0.875rem;color:var(--color-text-secondary);margin-top:16px">Tu peso actual (${user.units})</label>
+        <label style="display:block;margin-bottom:8px;font-size:0.875rem;color:var(--color-text-secondary);margin-top:16px">Tu peso actual (kg)</label>
         <input type="number" id="bw-input" class="input input-number" style="font-size:1.5rem;height:60px;margin-bottom:12px" value="${last}" inputmode="decimal">
         <button class="btn btn-primary btn-block" onclick="ProfileScreen.saveBodyWeight()">Guardar Peso</button>
       </div>
@@ -778,7 +778,7 @@ export const ProfileScreen = {
       
       weightHtml = `
         <div class="bw-chart-container">
-          <h4>⚖️ Peso Corporal (${user.units})</h4>
+          <h4>⚖️ Peso Corporal (kg)</h4>
           <canvas id="evo-weight-chart" width="400" height="160"></canvas>
         </div>`;
     }
@@ -822,7 +822,7 @@ export const ProfileScreen = {
               <div style="min-width:80px;text-align:center">
                 <img src="${p.base64}" style="width:80px;height:106px;object-fit:cover;border-radius:8px;border:1px solid var(--color-border)">
                 <div style="font-size:0.55rem;color:var(--color-text-tertiary);margin-top:4px">${new Date(p.date).toLocaleDateString('es-ES', {day:'numeric',month:'short'})}</div>
-                ${p.weight ? `<div style="font-size:0.55rem;color:var(--color-accent)">${p.weight}${user.units}</div>` : ''}
+                ${p.weight ? `<div style="font-size:0.55rem;color:var(--color-accent)">${p.weight}kg</div>` : ''}
               </div>
             `).join('')}
             ${photos.length > 6 ? `<div style="min-width:40px;display:flex;align-items:center;font-size:0.7rem;color:var(--color-text-tertiary)">+${photos.length - 6}</div>` : ''}
@@ -1005,7 +1005,7 @@ export const ProfileScreen = {
             <img src="${p.base64}" class="photo-thumb" loading="lazy">
             <div class="photo-meta">
               <span class="photo-date">${new Date(p.date).toLocaleDateString(undefined, {day:'numeric', month:'short'})}</span>
-              <span class="photo-weight">${p.weight ? p.weight + user.units : '-'}</span>
+              <span class="photo-weight">${p.weight ? p.weight + 'kg' : '-'}</span>
             </div>
           </div>
         `).join('')}
