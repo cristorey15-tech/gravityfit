@@ -418,6 +418,36 @@
 .folder-section.collapsed .folder-chevron { transform:rotate(-90deg); }
 .folder-section.collapsed .folder-content { display:none; }
 
+/* --- Routine Folder Tag (clickable to move) --- */
+.routine-folder-tag {
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  padding:2px 8px;
+  border-radius:var(--radius-full);
+  font-size:0.6rem;
+  font-weight:var(--font-weight-semibold);
+  background:var(--color-accent-dim);
+  color:var(--color-accent);
+  cursor:pointer;
+  transition:all var(--transition-fast);
+  white-space:nowrap;
+}
+.routine-folder-tag:hover {
+  background:rgba(163,255,18,0.25);
+  transform:scale(1.05);
+}
+.routine-folder-tag--empty {
+  background:var(--color-bg-input);
+  color:var(--color-text-tertiary);
+  border:1px dashed var(--color-border);
+}
+.routine-folder-tag--empty:hover {
+  border-color:var(--color-accent);
+  color:var(--color-accent);
+  background:var(--color-accent-dim);
+}
+
 /* --- Rotation Program View --- */
 .rotation-chips {
   display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;

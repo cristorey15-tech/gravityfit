@@ -83,6 +83,9 @@ export const RoutinesScreen = {
       return d ? d.name : e.exerciseId;
     }).slice(0, 4);
     const more = exercises.length > 4 ? ` +${exercises.length - 4} más` : '';
+    const folderTag = routine.folder
+      ? `<span class="routine-folder-tag" onclick="event.stopPropagation();RoutinesScreen.showMoveFolder('${routine.id}')">📁 ${routine.folder}</span>`
+      : `<span class="routine-folder-tag routine-folder-tag--empty" onclick="event.stopPropagation();RoutinesScreen.showMoveFolder('${routine.id}')">+ Carpeta</span>`;
 
     return `
       <div class="routine-card">
@@ -99,6 +102,7 @@ export const RoutinesScreen = {
           <span>${exercises.length} ejercicios</span>
           <span>•</span>
           <span>${exercises.reduce((s, e) => s + (e.sets || 0), 0)} series</span>
+          <span style="margin-left:auto">${folderTag}</span>
         </div>
         <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="event.stopPropagation();App.startRoutineWorkout('${routine.id}')">
           Iniciar Rutina
@@ -377,6 +381,51 @@ export const RoutinesScreen = {
         <button class="btn btn-primary btn-block" onclick="RoutinesScreen.copyCode()">Copiar Código</button>
       </div>
     `, { title: 'Compartir Rutina' });
+  },
+
+  showMoveFolder(id) {
+    const routine = Storage.getRoutine(id);
+    if (!routine) return;
+    const folders = Storage.getRoutineFolders();
+    const currentFolder = routine.folder || '';
+    
+    Modal.show(`
+      <p style="margin-bottom:16px;color:var(--color-text-secondary);font-size:0.875rem">
+        Asigna o cambia la carpeta de <strong>${routine.name}</strong>
+      </p>
+      <div class="input-group" style="margin-bottom:16px">
+        <label class="input-label">Carpeta</label>
+        <input class="input" id="move-folder-input" value="${currentFolder}" list="move-folder-list" placeholder="Ej: Push/Pull/Legs" autofocus>
+        <datalist id="move-folder-list">
+          ${folders.map(f => `<option value="${f}">`).join('')}
+        </datalist>
+      </div>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+        ${currentFolder ? `<button class="btn btn-ghost" onclick="RoutinesScreen.removeFolderFromRoutine('${id}')">Quitar de carpeta</button>` : ''}
+        <button class="btn btn-primary flex-1" onclick="RoutinesScreen.saveMoveFolder('${id}')">Guardar</button>
+      </div>
+    `, { title: '📁 Mover a Carpeta', center: true });
+    
+    setTimeout(() => {
+      const input = document.getElementById('move-folder-input');
+      if (input) input.focus();
+    }, 200);
+  },
+
+  saveMoveFolder(id) {
+    const folder = document.getElementById('move-folder-input')?.value.trim() || '';
+    Storage.updateRoutine(id, { folder });
+    Toast.show(folder ? '📁 Rutina movida a carpeta' : '📁 Carpeta eliminada');
+    Modal.hide();
+    this.render();
+  },
+
+  removeFolderFromRoutine(id) {
+    Storage.updateRoutine(id, { folder: '' });
+    Toast.show('📁 Carpeta eliminada');
+    Modal.hide();
+    this.render();
   },
 
   copyCode() {
