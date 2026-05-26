@@ -67,6 +67,8 @@ export const HomeScreen = {
 
         ${this.renderActiveProgram()}
 
+        ${this.renderWeeklyChallenges()}
+
         ${this.renderWeekSummary(comparison, user)}
 
         ${lastWorkout ? `
@@ -225,6 +227,44 @@ export const HomeScreen = {
     const days = Math.floor(hours / 24);
     if (days === 1) return 'ayer';
     return `hace ${days} días`;
+  },
+
+  renderWeeklyChallenges() {
+    // Ensure challenges exist
+    if (typeof window.Gamification === 'undefined') return '';
+    const challenges = window.Gamification.ensureWeeklyChallenges();
+    if (!challenges || challenges.length === 0) return '';
+    
+    const completed = challenges.filter(c => c.completed).length;
+    
+    return `
+      <div class="weekly-challenges" style="margin-bottom:var(--space-6)">
+        <div class="home-section-title">
+          <span>🎯 Retos Semanales</span>
+          <span style="font-size:0.7rem;color:var(--color-text-tertiary)">${completed}/${challenges.length}</span>
+        </div>
+        ${challenges.map((c, i) => {
+          const pct = c.completed ? 100 : Math.min(99, Math.round((c.current / c.target) * 100));
+          return `
+            <div class="challenge-card ${c.completed ? 'completed' : ''}" style="animation-delay:${i * 80}ms">
+              <div style="display:flex;align-items:center;gap:var(--space-3);flex:1;min-width:0">
+                <div style="font-size:1.3rem">${c.completed ? '✅' : c.icon}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-2)">
+                    <span style="font-size:0.8rem;font-weight:var(--font-weight-semibold)">${c.title}</span>
+                    <span style="font-size:0.65rem;color:${c.completed ? 'var(--color-success)' : 'var(--color-text-tertiary)'};white-space:nowrap">${c.completed ? '¡Hecho!' : `${c.current}/${c.target}`}</span>
+                  </div>
+                  <div style="font-size:0.65rem;color:var(--color-text-tertiary);margin-top:2px">${c.desc}</div>
+                  <div class="challenge-bar-track">
+                    <div class="challenge-bar-fill ${c.completed ? 'done' : ''}" style="width:${pct}%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
   },
 
   renderBodyWeightWidget(user) {

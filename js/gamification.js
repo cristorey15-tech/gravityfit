@@ -134,6 +134,13 @@ export const Gamification = {
       user.stats.activeMonths.push(monthKey);
     }
 
+    // 2.5 Weekly PR tracking for challenges
+    if (!user.stats.weeklyPRs) user.stats.weeklyPRs = 0;
+    user.stats.weeklyPRs += prCount;
+    
+    // 2.6 Actualizar retos semanales
+    this.updateWeeklyChallenges(workoutData, prCount);
+
     // 3. Evaluación de Insignias (Badges)
     const allWorkouts = Storage.getWorkouts(); // ya incluye el que acaba de terminar
     const durationMins = workoutData.startedAt ? (finishDate.getTime() - new Date(workoutData.startedAt).getTime()) / 60000 : 0;
@@ -209,6 +216,234 @@ export const Gamification = {
       newLevel: leveledUp ? newLevel : null,
       newBadges
     };
+  },
+
+    // ============================================
+  // FEATURE #5 — Retos Semanales
+  // ============================================
+  
+  // Pool de retos semanales posibles (con descripciones contextuales)
+  CHALLENGE_POOL: [
+    { type: 'workouts', target: [3, 5, 7], icon: '🏃', 
+      titleFn: (t) => `${t} Entrenos`,
+      descFn: (t) => `Completa ${t} entrenamientos esta semana` },
+    { type: 'volume', target: [25000, 50000, 100000], icon: '🏋️',
+      titleFn: (t) => `${(t / 1000).toFixed(0)}k kg`,
+      descFn: (t) => `Levanta ${(t / 1000).toFixed(0)}k kg en total esta semana` },
+    { type: 'duration', target: [120, 240, 360], icon: '⏱️', // en minutos
+      titleFn: (t) => `${t} min`,
+      descFn: (t) => `Entrena un total de ${t} minutos esta semana` },
+    { type: 'unique_exercises', target: [8, 15, 25], icon: '💪',
+      titleFn: (t) => `${t} Ejercicios`,
+      descFn: (t) => `Usa ${t} ejercicios diferentes esta semana` },
+    { type: 'streak_days', target: [3, 5, 7], icon: '🔥',
+      titleFn: (t) => `Racha ${t} días`,
+      descFn: (t) => `Mantén una racha activa de ${t} días seguidos` },
+    { type: 'total_sets', target: [30, 60, 100], icon: '🎯',
+      titleFn: (t) => `${t} Series`,
+      descFn: (t) => `Completa ${t} series esta semana` },
+    { type: 'prs', target: [1, 3, 5], icon: '🏆',
+      titleFn: (t) => `${t} PR${t > 1 ? 's' : ''}`,
+      descFn: (t) => `Rompe ${t} ${t === 1 ? 'récord personal' : 'récords personales'} esta semana` },
+    { type: 'muscles', target: [3, 5, 8], icon: '🦾',
+      titleFn: (t) => `${t} Músculos`,
+      descFn: (t) => `Trabaja ${t} grupos musculares distintos esta semana` },
+    { type: 'morning_workouts', target: [2, 4], icon: '🌅',
+      titleFn: (t) => `${t} Mañanas`,
+      descFn: (t) => `Entrena ${t} veces antes de las 8 AM` },
+    { type: 'calories', target: [300, 600, 1000], icon: '🔥',
+      titleFn: (t) => `${t} cal`,
+      descFn: (t) => `Quema ${t} calorías esta semana (con sensor HR)` },
+    { type: 'program_days', target: [2, 3, 5], icon: '📅',
+      titleFn: (t) => `${t} del Prog.`,
+      descFn: (t) => `Completa ${t} días de tu programa activo` },
+  ],
+
+  // Generar retos para la semana actual (lunes a domingo)
+  _getWeekMonday() {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
+    const monday = new Date(now.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+    return monday.toISOString().split('T')[0];
+  },
+
+  ensureWeeklyChallenges() {
+    const user = Storage.getUser();
+    if (!user.weeklyChallenges) user.weeklyChallenges = { weekStart: '', challenges: [] };
+    
+    const currentWeek = this._getWeekMonday();
+    
+    // Si está cambiando la semana, resetear contadores semanales
+    if (user.weeklyChallenges.weekStart !== currentWeek) {
+      user.stats.weeklyPRs = 0;
+    }
+    
+    // Si ya están generados para esta semana, devolverlos
+    if (user.weeklyChallenges.weekStart === currentWeek && user.weeklyChallenges.challenges.length >= 3) {
+      return user.weeklyChallenges.challenges;
+    }
+    
+    // Generar 3 retos nuevos para esta semana
+    const activeProgram = Storage.getActiveProgram();
+    let pool = [...this.CHALLENGE_POOL];
+    
+    // Filtrar retos que requieren datos que el usuario no tiene
+    const allWorkouts = Storage.getWorkouts();
+    const hasHRData = allWorkouts.some(w => w.heartRateData?.totalCalories > 0);
+    if (!hasHRData) {
+      pool = pool.filter(c => c.type !== 'calories');
+    }
+    
+    // Dar más peso a retos de programa si hay uno activo
+    if (activeProgram) {
+      // Mover 'program_days' al inicio para que sea más probable
+      const progIdx = pool.findIndex(c => c.type === 'program_days');
+      if (progIdx > 0) {
+        const item = pool.splice(progIdx, 1)[0];
+        pool.unshift(item);
+      }
+    }
+    
+    // Barajar (shuffle) el pool
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    
+    // Seleccionar 3 retos, prefiriendo variedad de tipos
+    const selected = [];
+    const usedTypes = new Set();
+    
+    for (const template of pool) {
+      if (selected.length >= 3) break;
+      if (usedTypes.has(template.type)) continue;
+      
+      usedTypes.add(template.type);
+      
+      // Elegir dificultad según nivel del usuario
+      const totalWorkouts = Storage.getWorkouts().length;
+      let difficultyIdx = 0;
+      if (totalWorkouts > 100) difficultyIdx = 2;
+      else if (totalWorkouts > 30) difficultyIdx = 1;
+      
+      const targetIdx = Math.min(difficultyIdx, template.target.length - 1);
+      const target = template.target[targetIdx];
+      
+      selected.push({
+        id: `wc_${template.type}_${currentWeek}`,
+        type: template.type,
+        target,
+        current: 0,
+        completed: false,
+        icon: template.icon,
+        title: template.titleFn(target),
+        desc: template.descFn(target),
+        programRelated: template.type === 'program_days',
+      });
+    }
+    
+    user.weeklyChallenges = { weekStart: currentWeek, challenges: selected };
+    Storage.saveUser(user);
+    return selected;
+  },
+
+  // Actualizar progreso de retos semanales después de un workout
+  updateWeeklyChallenges(workoutData, prCount = 0) {
+    const user = Storage.getUser();
+    if (!user.weeklyChallenges || user.weeklyChallenges.weekStart !== this._getWeekMonday()) {
+      this.ensureWeeklyChallenges();
+    }
+    
+    const challenges = user.weeklyChallenges.challenges;
+    const allWorkouts = Storage.getWorkouts();
+    const weekWorkouts = Storage.getWorkoutsThisWeek();
+    const weekVol = weekWorkouts.reduce((s, w) => s + Storage.getTotalVolume(w), 0);
+    const weekDuration = weekWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
+    const weekSets = weekWorkouts.reduce((s, w) => s + ((w.exercises || []).reduce((ss, ex) => ss + (ex.sets || []).filter(st => st.completed).length, 0)), 0);
+    
+    // Unique exercises this week
+    const weekExSet = new Set();
+    weekWorkouts.forEach(w => (w.exercises || []).forEach(e => weekExSet.add(e.exerciseId)));
+    
+    // Muscles this week
+    const weekMuscles = new Set();
+    weekWorkouts.forEach(w => (w.exercises || []).forEach(e => {
+      const d = Storage.getExercise(e.exerciseId);
+      if (d && d.primaryMuscle) weekMuscles.add(d.primaryMuscle);
+    }));
+    
+    // Morning workouts: finished before 8 AM
+    const morningCount = weekWorkouts.filter(w => {
+      if (!w.finishedAt) return false;
+      const h = new Date(w.finishedAt).getHours();
+      return h < 8;
+    }).length;
+    
+    // Calories from heart rate
+    const weekCalories = weekWorkouts.reduce((s, w) => s + (w.heartRateData?.totalCalories || 0), 0);
+    
+    // Program days
+    const activeProgram = Storage.getActiveProgram();
+    const programDays = activeProgram ? (activeProgram.completedWorkouts || []).length : 0;
+    
+    const completedIds = [];
+    
+    challenges.forEach(c => {
+      if (c.completed) return;
+      
+      switch (c.type) {
+        case 'workouts':
+          c.current = Math.min(c.target, weekWorkouts.length);
+          break;
+        case 'volume':
+          c.current = Math.min(c.target, Math.round(weekVol));
+          break;
+        case 'duration':
+          c.current = Math.min(c.target, Math.round(weekDuration / 60));
+          break;
+        case 'unique_exercises':
+          c.current = Math.min(c.target, weekExSet.size);
+          break;
+        case 'streak_days':
+          c.current = Math.min(c.target, Storage.getStreak());
+          break;
+        case 'total_sets':
+          c.current = Math.min(c.target, weekSets);
+          break;
+        case 'prs':
+          c.current = Math.min(c.target, (user.stats?.weeklyPRs || 0));
+          break;
+        case 'muscles':
+          c.current = Math.min(c.target, weekMuscles.size);
+          break;
+        case 'morning_workouts':
+          c.current = Math.min(c.target, morningCount);
+          break;
+        case 'calories':
+          c.current = Math.min(c.target, Math.round(weekCalories));
+          break;
+        case 'program_days':
+          c.current = Math.min(c.target, programDays);
+          break;
+      }
+      
+      if (c.current >= c.target) {
+        c.completed = true;
+        completedIds.push(c);
+      }
+    });
+    
+    Storage.saveUser(user);
+    
+    // Notify completed challenges
+    completedIds.forEach(c => {
+      Toast.show(`🎯 ¡Reto superado: ${c.title}!`, 'success', 4000);
+      if (navigator.vibrate) navigator.vibrate([100, 50, 200]);
+    });
+    
+    return challenges;
   },
 
   // Genera el HTML de la pantalla de Recompensas

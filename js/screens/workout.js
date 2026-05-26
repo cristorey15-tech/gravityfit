@@ -107,6 +107,7 @@ export const WorkoutScreen = {
               <div style="min-width:0">
                 <div class="exercise-block-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
                 <div class="exercise-block-muscle">${muscle}</div>
+                ${this.renderLastPerformance(ex.exerciseId, exUnit)}
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:3px;flex-shrink:0">
@@ -664,13 +665,17 @@ export const WorkoutScreen = {
     this.save();
     this.render();
 
-    // Micro-effect: flash the set row on completion
+    // Micro-effect: flash the set row on completion + particles
     if (set.completed) {
       const setRows = document.querySelectorAll(`.exercise-block[data-ex-idx="${exIdx}"] .set-row`);
       const row = setRows && setRows[setIdx];
       if (row) {
         row.classList.add('set-flash');
         setTimeout(() => row.classList.remove('set-flash'), 400);
+      }
+      // Feature 10: Micro-particles burst
+      if (window.SetParticles && row) {
+        window.SetParticles.burst(row);
       }
     }
 
@@ -923,6 +928,22 @@ export const WorkoutScreen = {
     this._isPaused = !this._isPaused;
     Toast.show(this._isPaused ? '⏸️ Pausado' : '▶️ Reanudado', 'info', 1000);
     this.render();
+  },
+
+  // --- FEATURE 2: Last Performance Display ---
+  renderLastPerformance(exerciseId, exUnit) {
+    const prev = Storage.getPreviousPerformance(exerciseId);
+    if (!prev || prev.length === 0) return '';
+    let bestW = 0, bestR = 0, bestVol = 0;
+    prev.forEach(s => {
+      if (!s.completed) return;
+      const w = s.weight || 0;
+      const r = s.reps || 0;
+      const vol = w * r;
+      if (vol > bestVol) { bestVol = vol; bestW = w; bestR = r; }
+    });
+    if (bestW === 0) return '';
+    return `<div style="font-size:0.65rem;color:var(--color-accent);font-weight:var(--font-weight-semibold);margin-top:1px;letter-spacing:-0.2px">📈 ${bestW}${exUnit}×${bestR}</div>`;
   },
 
   // --- FEATURE C: Swipe to complete set ---

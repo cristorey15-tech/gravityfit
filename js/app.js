@@ -3,7 +3,7 @@
 // ============================================
 
 import { Storage } from './storage.js';
-import { Toast, Navbar, RestTimer, Confetti, PRCelebration, BadgeCelebration, Onboarding } from './components.js';
+import { Toast, Navbar, RestTimer, Confetti, PRCelebration, BadgeCelebration, SetParticles, Onboarding } from './components.js';
 import { HomeScreen } from './screens/home.js';
 import { WorkoutScreen } from './screens/workout.js';
 import { RoutinesScreen } from './screens/routines.js';
@@ -36,6 +36,7 @@ export const App = {
     Confetti.init();
     PRCelebration.init();
     BadgeCelebration.init();
+    SetParticles.init();
 
     // Hide splash screen
     const splash = document.getElementById('splash-screen');

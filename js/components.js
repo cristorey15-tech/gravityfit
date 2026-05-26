@@ -673,6 +673,55 @@ export function playBadgeSound(difficulty = 'easy') {
   }
 }
 
+// --- Feature 10: Set Particles (Micro-feedback al completar serie) ---
+export const SetParticles = {
+  burst(element) {
+    const rect = element.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const colors = ['#A3FF12', '#FFD700', '#60A5FA', '#FB7185', '#34D399', '#A78BFA'];
+    const container = document.getElementById('particles-container');
+    if (!container) return;
+    
+    for (let i = 0; i < 12; i++) {
+      const particle = document.createElement('div');
+      const angle = (Math.PI * 2 * i) / 12 + (Math.random() - 0.5) * 0.5;
+      const dist = 40 + Math.random() * 60;
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      const size = 3 + Math.random() * 5;
+      
+      particle.style.cssText = `
+        position:fixed; left:${cx}px; top:${cy}px; width:${size}px; height:${size}px;
+        border-radius:50%; background:${colors[i % colors.length]};
+        pointer-events:none; z-index:500;
+        transition:all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        opacity:1;
+      `;
+      container.appendChild(particle);
+      
+      // Animate outward
+      requestAnimationFrame(() => {
+        particle.style.transform = `translate(${dx}px, ${dy}px) scale(0.3)`;
+        particle.style.opacity = '0';
+      });
+      
+      // Clean up
+      setTimeout(() => particle.remove(), 700);
+    }
+  },
+  
+  init() {
+    if (!document.getElementById('particles-container')) {
+      const c = document.createElement('div');
+      c.id = 'particles-container';
+      c.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:490';
+      document.body.appendChild(c);
+    }
+    window.SetParticles = this;
+  }
+};
+
 export const LineChart = {
   render(data, options = {}) {
     if (!data || data.length === 0) return '';
