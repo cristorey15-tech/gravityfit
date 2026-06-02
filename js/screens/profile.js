@@ -5,6 +5,7 @@
 import { Storage } from '../storage.js';
 import { Icons, Modal, Toast } from '../components.js';
 import { HomeScreen } from './home.js';
+import { StorageHealth } from '../storage-health.js';
 
 export const ProfileScreen = {
   render() {
@@ -192,13 +193,21 @@ export const ProfileScreen = {
 
         <div class="settings-group">
           <div class="settings-group-title">Apariencia</div>
+          <div class="settings-item" onclick="ProfileScreen.toggleDarkMode()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">${user.darkMode ? '🌙' : '☀️'}</span>
+              <span class="settings-item-label">Modo Oscuro</span>
+            </div>
+            <div class="toggle ${user.darkMode ? 'active' : ''}"></div>
+          </div>
+          <div style="padding:8px 0 4px;font-size:var(--font-size-xs);color:var(--color-text-secondary);font-weight:var(--font-weight-medium)">Color de Acento</div>
           <div class="theme-selector">
-            <div class="theme-dot ${!user.theme || user.theme === 'theme-lime' ? 'active' : ''}" style="background-color:#A3FF12" onclick="ProfileScreen.setTheme('theme-lime')"></div>
-            <div class="theme-dot ${user.theme === 'theme-blue' ? 'active' : ''}" style="background-color:#60A5FA" onclick="ProfileScreen.setTheme('theme-blue')"></div>
-            <div class="theme-dot ${user.theme === 'theme-purple' ? 'active' : ''}" style="background-color:#A78BFA" onclick="ProfileScreen.setTheme('theme-purple')"></div>
-            <div class="theme-dot ${user.theme === 'theme-red' ? 'active' : ''}" style="background-color:#FB7185" onclick="ProfileScreen.setTheme('theme-red')"></div>
-            <div class="theme-dot ${user.theme === 'theme-orange' ? 'active' : ''}" style="background-color:#FB923C" onclick="ProfileScreen.setTheme('theme-orange')"></div>
-            <div class="theme-dot ${user.theme === 'theme-cyan' ? 'active' : ''}" style="background-color:#22D3EE" onclick="ProfileScreen.setTheme('theme-cyan')"></div>
+            <div class="theme-dot ${!user.theme || user.theme === 'theme-lime' ? 'active' : ''}" style="background-color:#A3FF12" onclick="ProfileScreen.setAccentTheme('theme-lime')"></div>
+            <div class="theme-dot ${user.theme === 'theme-blue' ? 'active' : ''}" style="background-color:#60A5FA" onclick="ProfileScreen.setAccentTheme('theme-blue')"></div>
+            <div class="theme-dot ${user.theme === 'theme-purple' ? 'active' : ''}" style="background-color:#A78BFA" onclick="ProfileScreen.setAccentTheme('theme-purple')"></div>
+            <div class="theme-dot ${user.theme === 'theme-red' ? 'active' : ''}" style="background-color:#FB7185" onclick="ProfileScreen.setAccentTheme('theme-red')"></div>
+            <div class="theme-dot ${user.theme === 'theme-orange' ? 'active' : ''}" style="background-color:#FB923C" onclick="ProfileScreen.setAccentTheme('theme-orange')"></div>
+            <div class="theme-dot ${user.theme === 'theme-cyan' ? 'active' : ''}" style="background-color:#22D3EE" onclick="ProfileScreen.setAccentTheme('theme-cyan')"></div>
           </div>
         </div>
 
@@ -276,6 +285,34 @@ export const ProfileScreen = {
         </div>
 
         <div class="settings-group">
+          <div class="settings-group-title">🛡️ Protección de Datos</div>
+          <div id="storage-health-status" style="padding:12px;margin:0 0 8px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;font-size:0.75rem;color:var(--color-text-secondary);line-height:1.6;white-space:pre-line">
+            ⏳ Verificando estado del almacenamiento...
+          </div>
+          <div class="settings-item" onclick="ProfileScreen.showStorageHealth()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">🔍</span>
+              <span class="settings-item-label">Estado del Almacenamiento</span>
+            </div>
+            <span class="settings-item-value" id="storage-health-indicator" style="font-size:0.7rem;color:var(--color-accent)">Verificar</span>
+          </div>
+          <div class="settings-item" onclick="ProfileScreen.downloadBackupFile()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">💾</span>
+              <span class="settings-item-label">Descargar Respaldo Completo</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">JSON</span>
+          </div>
+          <div class="settings-item" onclick="ProfileScreen.restoreBackupFile()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">📥</span>
+              <span class="settings-item-label">Restaurar desde Respaldo</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">Importar</span>
+          </div>
+        </div>
+
+        <div class="settings-group">
           <div class="settings-group-title">Datos Locales</div>
           <div class="settings-item" onclick="ProfileScreen.exportData()">
             <div class="settings-item-left">
@@ -300,9 +337,12 @@ export const ProfileScreen = {
         </div>
 
         <div style="text-align:center;padding:24px 0;color:var(--color-text-tertiary);font-size:var(--font-size-xs)">
-          GravityFit v1.0 · Hecho con 💪
+          GravityFit v2.1 · Hecho con 💪
         </div>
       </div>`;
+
+      // Load storage health async after render
+      setTimeout(() => this.loadStorageHealth(), 100);
   },
 
   editName() {
@@ -355,13 +395,40 @@ export const ProfileScreen = {
     this.render();
   },
 
-  setTheme(themeName) {
+  setAccentTheme(themeName) {
     const user = Storage.getUser();
     user.theme = themeName;
     Storage.saveUser(user);
-    document.body.className = themeName;
+    this._applyThemeClasses(user);
     if (navigator.vibrate) navigator.vibrate(10);
     this.render();
+  },
+
+  toggleDarkMode() {
+    const user = Storage.getUser();
+    user.darkMode = !user.darkMode;
+    Storage.saveUser(user);
+    this._applyThemeClasses(user);
+    if (navigator.vibrate) navigator.vibrate(10);
+    this.render();
+  },
+
+  _applyThemeClasses(user) {
+    // Apply body classes for accent color and dark mode
+    const classes = [];
+    if (user.darkMode) classes.push('dark-mode');
+    if (user.theme) classes.push(user.theme);
+    document.body.className = classes.join(' ');
+
+    // Sync ThemeManager inline styles so they match the current mode
+    // This prevents specificity conflicts between inline styles and CSS classes
+    if (typeof window.themeManager !== 'undefined') {
+      window.themeManager.apply(user.darkMode ? 'dark' : 'light');
+    }
+
+    // Update theme-color meta tag for mobile browsers
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = user.darkMode ? '#0D0D0D' : '#F5F5F5';
   },
 
   show1RMCalc() {

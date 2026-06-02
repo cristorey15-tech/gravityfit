@@ -42,10 +42,15 @@ export const App = {
     const splash = document.getElementById('splash-screen');
     if (splash) splash.classList.add('hidden');
 
-    // Apply color theme
+    // Apply color theme + dark mode
     const user = Storage.getUser();
-    if (user.theme) {
-      document.body.className = user.theme;
+    if (user.darkMode || user.theme) {
+      const classes = [];
+      if (user.darkMode) classes.push('dark-mode');
+      if (user.theme) classes.push(user.theme);
+      document.body.className = classes.join(' ');
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.content = user.darkMode ? '#0D0D0D' : '#F5F5F5';
     }
 
     // Resume active workout if any
@@ -88,6 +93,27 @@ export const App = {
       const interactive = e.target.closest('.btn, .nav-item, .chip, .set-check, .exercise-list-item, .routine-card');
       if (interactive && navigator.vibrate) navigator.vibrate(5);
     }, { passive: true });
+
+    // Periodic backup reminder (check once per session, ~5s after load)
+    setTimeout(() => this.checkBackupReminder(), 5000);
+  },
+
+  checkBackupReminder() {
+    try {
+      if (!Storage.shouldBackup()) return;
+
+      const totalWorkouts = Storage.getWorkouts().length;
+      if (totalWorkouts === 0) return; // No data to back up yet
+
+      Toast.show(
+        '💾 Recuerda respaldar tus datos — han pasado más de 7 días. Perfil → Protección de Datos.',
+        'warning',
+        6000
+      );
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+    } catch (e) {
+      // Non-critical — ignore errors
+    }
   },
 
   navigate(screenId, updateHash = true) {

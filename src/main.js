@@ -19,6 +19,7 @@ import { Gamification } from '../js/gamification.js';
 import { BLE } from '../js/bluetooth.js';
 import { CloudSync } from '../js/sync.js';
 import { AICoach } from '../js/ai-coach.js';
+import { StorageHealth } from '../js/storage-health.js';
 
 // Import screens
 import { HomeScreen } from '../js/screens/home.js';
@@ -44,6 +45,7 @@ window.Gamification = Gamification;
 window.BLE = BLE;
 window.CloudSync = CloudSync;
 window.AICoach = AICoach;
+window.StorageHealth = StorageHealth;
 window.HomeScreen = HomeScreen;
 window.WorkoutScreen = WorkoutScreen;
 window.RoutinesScreen = RoutinesScreen;

@@ -1,6 +1,13 @@
 // ============================================
 // GravityFit — Storage Layer (storage.js)
 // ============================================
+// v2.1 — Fixed critical data loss bugs:
+//   1. _dbSet now uses async transactions with proper error handling
+//   2. localStorage backup fallback on every write
+//   3. Storage quota monitoring
+//   4. Data integrity validation on load
+//   5. Auto-backup export support
+// ============================================
 
 import { DEFAULT_EXERCISES } from '../src/data.js';
 import { Logger } from '../src/Logger.js';
@@ -18,101 +25,440 @@ export const Storage = {
     PHOTOS: 'gf_photos'
   },
 
+  // Backup keys prefix for localStorage fallback
+  _BACKUP_PREFIX: 'gf_bak_',
+
   _state: {},
   _db: null,
-  
-  // IndexedDB Init & Migration
+  _dbReady: false,
+  _quotaWarningShown: false,
+
+  // =============================================
+  // IndexedDB Init & Migration (FIXED)
+  // =============================================
   initDb() {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open('GravityFitDB', 1);
-      req.onupgradeneeded = (e) => {
+      let dbReq;
+      try {
+        dbReq = indexedDB.open('GravityFitDB', 1);
+      } catch (e) {
+        Logger.error('IndexedDB not available, using localStorage only', e);
+        this._loadFromLocalStorageBackup();
+        resolve();
+        return;
+      }
+
+      dbReq.onupgradeneeded = (e) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('store')) {
           db.createObjectStore('store');
         }
       };
-      req.onsuccess = (e) => {
+
+      dbReq.onsuccess = (e) => {
         this._db = e.target.result;
-        this._loadAllFromDb().then(resolve);
-      };
-      req.onerror = () => {
-        Logger.error('IndexedDB error, falling back to empty state');
-        resolve(); // Fallback to avoid breaking app
-      };
-    });
-  },
+        this._dbReady = true;
 
-  _loadAllFromDb() {
-    return new Promise((resolve) => {
-      const tx = this._db.transaction('store', 'readonly');
-      const store = tx.objectStore('store');
-      const req = store.getAll();
-      const keysReq = store.getAllKeys();
-      
-      tx.oncomplete = () => {
-        const keys = keysReq.result || [];
-        const values = req.result || [];
-        let hasData = false;
-        
-        for (let i = 0; i < keys.length; i++) {
-          this._state[keys[i]] = values[i];
-          hasData = true;
-        }
+        // Handle connection loss
+        this._db.onversionchange = () => {
+          Logger.warn('IndexedDB version change detected — closing connection');
+          this._db.close();
+          this._db = null;
+          this._dbReady = false;
+        };
 
-        // Migration from localStorage if IDB is empty
-        if (!hasData) {
-          Logger.info('IndexedDB empty. Migrating from localStorage...');
-          for (const key of Object.values(this.KEYS)) {
-            const lsVal = localStorage.getItem(key);
-            if (lsVal) {
-              try {
-                const parsed = JSON.parse(lsVal);
-                this._state[key] = parsed;
-                this._dbSet(key, parsed); // Save to IDB
-              } catch(e) {
-                Logger.warn('Failed to parse localStorage data for key:', key, e);
-              }
-            }
-          }
-          localStorage.setItem('gf_migrated', 'true');
-        }
+        this._loadAllFromDb().then(resolve).catch((err) => {
+          Logger.error('Error loading from IndexedDB, falling back to localStorage', err);
+          this._loadFromLocalStorageBackup();
+          resolve();
+        });
+      };
+
+      dbReq.onerror = (e) => {
+        Logger.error('IndexedDB open error', e.target.error);
+        // DO NOT silently resolve with empty state — try localStorage backup
+        this._loadFromLocalStorageBackup();
+        resolve();
+      };
+
+      dbReq.onblocked = () => {
+        Logger.warn('IndexedDB blocked — another tab may have it open');
+        this._loadFromLocalStorageBackup();
         resolve();
       };
     });
   },
 
+  async _loadAllFromDb() {
+    return new Promise((resolve, reject) => {
+      if (!this._db) {
+        reject(new Error('No IndexedDB connection'));
+        return;
+      }
+
+      try {
+        const tx = this._db.transaction('store', 'readonly');
+        const store = tx.objectStore('store');
+        const req = store.getAll();
+        const keysReq = store.getAllKeys();
+
+        tx.oncomplete = () => {
+          const keys = keysReq.result || [];
+          const values = req.result || [];
+          let hasData = false;
+
+          for (let i = 0; i < keys.length; i++) {
+            this._state[keys[i]] = values[i];
+            hasData = true;
+          }
+
+          // Validate loaded data integrity
+          this._validateDataIntegrity();
+
+          // Migration from localStorage if IDB is empty
+          if (!hasData) {
+            Logger.info('IndexedDB empty. Migrating from localStorage...');
+            this._loadFromLocalStorageBackup();
+            // Also try the old localStorage migration path
+            for (const key of Object.values(this.KEYS)) {
+              const lsVal = localStorage.getItem(key);
+              if (lsVal) {
+                try {
+                  const parsed = JSON.parse(lsVal);
+                  this._state[key] = parsed;
+                  this._dbSetSync(key, parsed); // Sync save to IDB
+                } catch(e) {
+                  Logger.warn('Failed to parse localStorage data for key:', key, e);
+                }
+              }
+            }
+            localStorage.setItem('gf_migrated', 'true');
+          }
+
+          // Sync backup to localStorage
+          this._syncBackupToLocalStorage();
+          resolve();
+        };
+
+        tx.onerror = (e) => {
+          Logger.error('IndexedDB read error', e.target.error);
+          reject(e.target.error);
+        };
+      } catch (e) {
+        reject(e);
+      }
+    });
+  },
+
+  // =============================================
+  // Data Integrity Validation
+  // =============================================
+  _validateDataIntegrity() {
+    const workouts = this._state[this.KEYS.WORKOUTS];
+    if (workouts && !Array.isArray(workouts)) {
+      Logger.warn('Workouts data corrupted — expected array, resetting');
+      this._state[this.KEYS.WORKOUTS] = [];
+    }
+
+    const routines = this._state[this.KEYS.ROUTINES];
+    if (routines && !Array.isArray(routines)) {
+      Logger.warn('Routines data corrupted — expected array, resetting');
+      this._state[this.KEYS.ROUTINES] = [];
+    }
+
+    const user = this._state[this.KEYS.USER];
+    if (user && typeof user !== 'object') {
+      Logger.warn('User data corrupted — expected object, resetting');
+      this._state[this.KEYS.USER] = null;
+    }
+
+    const programs = this._state[this.KEYS.PROGRAMS];
+    if (programs && !Array.isArray(programs)) {
+      Logger.warn('Programs data corrupted — expected array, resetting');
+      this._state[this.KEYS.PROGRAMS] = [];
+    }
+
+    const measurements = this._state[this.KEYS.MEASUREMENTS];
+    if (measurements && !Array.isArray(measurements)) {
+      Logger.warn('Measurements data corrupted — expected array, resetting');
+      this._state[this.KEYS.MEASUREMENTS] = [];
+    }
+  },
+
+  // =============================================
+  // IndexedDB Write (FIXED — async with backup)
+  // =============================================
   _dbSet(key, val) {
+    // Always write to in-memory state
+    this._state[key] = val;
+
+    // Always backup to localStorage (synchronous, reliable)
+    this._localStorageBackup(key, val);
+
+    // Write to IndexedDB (async, may fail)
+    if (this._db && this._dbReady) {
+      try {
+        const tx = this._db.transaction('store', 'readwrite');
+        tx.objectStore('store').put(val, key);
+        tx.oncomplete = () => {
+          Logger.debug('IDB write completed for key:', key);
+        };
+        tx.onerror = (e) => {
+          Logger.error('IDB write failed for key:', key, e.target.error);
+          // Data is safe in memory + localStorage backup
+        };
+        tx.onabort = (e) => {
+          Logger.warn('IDB write aborted for key:', key, e.target.error || 'transaction aborted');
+        };
+      } catch(e) {
+        Logger.error('IDB transaction error for key:', key, e);
+        // Data is safe in memory + localStorage backup
+      }
+    } else {
+      Logger.warn('IDB not available, data saved to memory + localStorage only, key:', key);
+    }
+  },
+
+  // Sync version for migration (no async needed)
+  _dbSetSync(key, val) {
     if (!this._db) return;
     try {
       const tx = this._db.transaction('store', 'readwrite');
       tx.objectStore('store').put(val, key);
-    } catch(e) { Logger.error('IDB Save Error', e); }
+    } catch(e) { Logger.error('IDB Save Error (sync)', e); }
   },
 
   _dbRemove(key) {
-    if (!this._db) return;
-    try {
-      const tx = this._db.transaction('store', 'readwrite');
-      tx.objectStore('store').delete(key);
-    } catch(e) { Logger.warn('IDB Remove Error', e); }
+    // Remove from in-memory
+    delete this._state[key];
+
+    // Remove from localStorage backup
+    localStorage.removeItem(this._BACKUP_PREFIX + key);
+
+    // Remove from IndexedDB
+    if (this._db && this._dbReady) {
+      try {
+        const tx = this._db.transaction('store', 'readwrite');
+        tx.objectStore('store').delete(key);
+        tx.onerror = (e) => {
+          Logger.error('IDB remove failed for key:', key, e.target.error);
+        };
+      } catch(e) {
+        Logger.warn('IDB Remove Error', e);
+      }
+    }
   },
 
-  // Generic
+  // =============================================
+  // localStorage Backup (synchronous fallback)
+  // =============================================
+  _localStorageBackup(key, val) {
+    try {
+      const serialized = JSON.stringify(val);
+      localStorage.setItem(this._BACKUP_PREFIX + key, serialized);
+
+      // Also update backup metadata
+      const meta = this._getBackupMeta();
+      meta.lastBackup = Date.now();
+      meta.keys = meta.keys || [];
+      if (!meta.keys.includes(key)) meta.keys.push(key);
+      localStorage.setItem(this._BACKUP_PREFIX + '_meta', JSON.stringify(meta));
+    } catch (e) {
+      // localStorage might be full — try to trim old backup data
+      Logger.warn('localStorage backup failed for key:', key, e);
+      this._handleStorageQuotaError(e);
+    }
+  },
+
+  _loadFromLocalStorageBackup() {
+    Logger.info('Loading data from localStorage backup...');
+    let loaded = 0;
+    for (const key of Object.values(this.KEYS)) {
+      const backupKey = this._BACKUP_PREFIX + key;
+      const lsVal = localStorage.getItem(backupKey);
+      if (lsVal) {
+        try {
+          const parsed = JSON.parse(lsVal);
+          this._state[key] = parsed;
+          loaded++;
+        } catch(e) {
+          Logger.warn('Failed to parse backup for key:', key, e);
+        }
+      }
+    }
+    if (loaded > 0) {
+      Logger.info(`Loaded ${loaded} keys from localStorage backup`);
+    } else {
+      Logger.warn('No localStorage backup data found');
+    }
+  },
+
+  _getBackupMeta() {
+    try {
+      const meta = localStorage.getItem(this._BACKUP_PREFIX + '_meta');
+      return meta ? JSON.parse(meta) : { lastBackup: 0, keys: [] };
+    } catch {
+      return { lastBackup: 0, keys: [] };
+    }
+  },
+
+  _syncBackupToLocalStorage() {
+    for (const key of Object.values(this.KEYS)) {
+      if (this._state[key] !== undefined) {
+        this._localStorageBackup(key, this._state[key]);
+      }
+    }
+  },
+
+  // =============================================
+  // Storage Quota Monitoring
+  // =============================================
+  async checkStorageQuota() {
+    if (!navigator.storage || !navigator.storage.estimate) {
+      return { available: true, usage: 0, quota: 0, percentage: 0 };
+    }
+    try {
+      const estimate = await navigator.storage.estimate();
+      const usage = estimate.usage || 0;
+      const quota = estimate.quota || 0;
+      const percentage = quota > 0 ? Math.round((usage / quota) * 100) : 0;
+
+      if (percentage > 80 && !this._quotaWarningShown) {
+        this._quotaWarningShown = true;
+        Logger.warn(`Storage quota high: ${percentage}% used (${this._formatBytes(usage)} / ${this._formatBytes(quota)})`);
+      }
+
+      return {
+        available: percentage < 95,
+        usage,
+        quota,
+        percentage,
+        formattedUsage: this._formatBytes(usage),
+        formattedQuota: this._formatBytes(quota),
+      };
+    } catch (e) {
+      Logger.warn('Storage quota check failed', e);
+      return { available: true, usage: 0, quota: 0, percentage: 0 };
+    }
+  },
+
+  _formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  },
+
+  _handleStorageQuotaError(e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22) {
+      Logger.error('Storage quota exceeded!', e);
+      // Try to free space by removing old photos (least critical data)
+      const photos = this._state[this.KEYS.PHOTOS];
+      if (photos && photos.length > 5) {
+        this._state[this.KEYS.PHOTOS] = photos.slice(-5);
+        this._localStorageBackup(this.KEYS.PHOTOS, this._state[this.KEYS.PHOTOS]);
+        Logger.info('Trimmed photos to free storage space');
+      }
+    }
+  },
+
+  // =============================================
+  // Generic Get/Set (with backup)
+  // =============================================
   _get(key) {
-    // Retornamos un clon rápido para evitar mutaciones directas indeseadas si se edita el array directamente
     const val = this._state[key];
     return val !== undefined ? val : null;
   },
+
   _set(key, val) {
-    this._state[key] = val;
     this._dbSet(key, val);
   },
+
   _remove(key) {
-    delete this._state[key];
     this._dbRemove(key);
   },
 
+  // =============================================
+  // Auto-Backup / Export
+  // =============================================
+  generateBackup() {
+    const backup = {
+      version: '2.1',
+      timestamp: new Date().toISOString(),
+      data: {}
+    };
+
+    for (const key of Object.values(this.KEYS)) {
+      const val = this._get(key);
+      if (val !== null) {
+        backup.data[key] = val;
+      }
+    }
+
+    return backup;
+  },
+
+  downloadBackup() {
+    const backup = this.generateBackup();
+    const json = JSON.stringify(backup, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().split('T')[0];
+    a.href = url;
+    a.download = `gravityfit-backup-${date}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    Logger.info('Backup downloaded:', `gravityfit-backup-${date}.json`);
+    return true;
+  },
+
+  async restoreBackup(fileContent) {
+    try {
+      const backup = JSON.parse(fileContent);
+
+      // Support both old format (flat keys) and new format (nested data)
+      const data = backup.data || backup;
+
+      for (const key of Object.values(this.KEYS)) {
+        if (data[key] !== undefined) {
+          this._set(key, data[key]);
+        }
+      }
+
+      Logger.info('Backup restored successfully');
+      return true;
+    } catch (e) {
+      Logger.error('Failed to restore backup', e);
+      return false;
+    }
+  },
+
+  // Schedule automatic backup reminder (check once per session)
+  _lastBackupCheck: 0,
+  shouldBackup() {
+    const now = Date.now();
+    const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+    if (now - this._lastBackupCheck < ONE_WEEK) return false;
+    this._lastBackupCheck = now;
+
+    const meta = this._getBackupMeta();
+    const lastBackup = meta.lastBackup || 0;
+    return (now - lastBackup) > ONE_WEEK;
+  },
+
+  markBackupDone() {
+    const meta = this._getBackupMeta();
+    meta.lastBackup = Date.now();
+    localStorage.setItem(this._BACKUP_PREFIX + '_meta', JSON.stringify(meta));
+  },
+
+  // =============================================
   // User Settings
+  // =============================================
   getUser() {
     return this._get(this.KEYS.USER) || {
       name: 'Atleta',
@@ -144,7 +490,9 @@ export const Storage = {
     return user.favorites ? user.favorites.includes(id) : false;
   },
 
+  // =============================================
   // Routines
+  // =============================================
   getRoutines() { return this._get(this.KEYS.ROUTINES) || []; },
   saveRoutines(routines) { this._set(this.KEYS.ROUTINES, routines); },
   addRoutine(routine) {
@@ -167,7 +515,9 @@ export const Storage = {
   },
   getRoutine(id) { return this.getRoutines().find(r => r.id === id) || null; },
 
+  // =============================================
   // Workouts (completed)
+  // =============================================
   getWorkouts() { return this._get(this.KEYS.WORKOUTS) || []; },
   saveWorkouts(workouts) { this._set(this.KEYS.WORKOUTS, workouts); },
   addWorkout(workout) {
@@ -182,12 +532,16 @@ export const Storage = {
     this.saveWorkouts(this.getWorkouts().filter(w => w.id !== id));
   },
 
+  // =============================================
   // Active workout (in-progress)
+  // =============================================
   getActiveWorkout() { return this._get(this.KEYS.ACTIVE_WORKOUT); },
   saveActiveWorkout(w) { this._set(this.KEYS.ACTIVE_WORKOUT, w); },
   clearActiveWorkout() { this._remove(this.KEYS.ACTIVE_WORKOUT); },
 
+  // =============================================
   // Custom exercises
+  // =============================================
   getCustomExercises() { return this._get(this.KEYS.CUSTOM_EXERCISES) || []; },
   addCustomExercise(ex) {
     const list = this.getCustomExercises();
@@ -202,7 +556,9 @@ export const Storage = {
     this._set(this.KEYS.CUSTOM_EXERCISES, list);
   },
 
+  // =============================================
   // All exercises (default + custom)
+  // =============================================
   getAllExercises() {
     return [...DEFAULT_EXERCISES, ...this.getCustomExercises()];
   },
@@ -210,7 +566,9 @@ export const Storage = {
     return this.getAllExercises().find(e => e.id === id) || null;
   },
 
+  // =============================================
   // Stats helpers
+  // =============================================
   getWorkoutsThisWeek() {
     const now = new Date();
     const startOfWeek = new Date(now);
@@ -279,12 +637,16 @@ export const Storage = {
     return null;
   },
 
+  // =============================================
   // UUID generator
+  // =============================================
   uuid() {
     return 'xxxx-xxxx-xxxx'.replace(/x/g, () => ((Math.random() * 16) | 0).toString(16));
   },
 
+  // =============================================
   // Export / Import
+  // =============================================
   exportData() {
     return JSON.stringify({
       user: this.getUser(),
@@ -309,7 +671,9 @@ export const Storage = {
     } catch(e) { Logger.error('Import data failed:', e); return false; }
   },
 
-  // --- XP & Level System ---
+  // =============================================
+  // XP & Level System
+  // =============================================
   LEVELS: [
     { name: 'Novato', minXP: 0, icon: '🌱' },
     { name: 'Iniciado', minXP: 500, icon: '🥉' },
@@ -352,7 +716,9 @@ export const Storage = {
     return { ...level, xp, nextLevel, progress, progressXP, neededXP };
   },
 
-  // --- Weekly Comparison ---
+  // =============================================
+  // Weekly Comparison
+  // =============================================
   getWorkoutsLastWeek() {
     const now = new Date();
     const startOfThisWeek = new Date(now);
@@ -407,7 +773,9 @@ export const Storage = {
     };
   },
 
-  // --- Exercise History for Progression ---
+  // =============================================
+  // Exercise History for Progression
+  // =============================================
   getExerciseHistory(exerciseId, limit = 6) {
     const workouts = this.getWorkouts();
     const history = [];
@@ -434,14 +802,12 @@ export const Storage = {
     const last = history[0];
     const prev = history[1] || null;
 
-    // Determine increment based on goal
     const weightInc = user.units === 'kg' ? 2.5 : 5;
     const repInc = 2;
 
     let suggestion = '';
-    let type = 'progress'; // 'progress' | 'deload' | 'maintain'
+    let type = 'progress';
 
-    // Check if user is trending down (potential deload)
     if (prev && last.maxWeight < prev.maxWeight && last.maxReps <= prev.maxReps) {
       suggestion = `Parece que bajaste. Intenta ${last.maxWeight}${user.units} × ${last.maxReps + 1} y recupera.`;
       type = 'deload';
@@ -456,7 +822,6 @@ export const Storage = {
       }
       type = 'progress';
     } else {
-      // Hypertrophy: alternate between +reps and +weight
       if (last.maxReps < 12) {
         suggestion = `Intenta ${last.maxWeight}${user.units} × ${last.maxReps + repInc}`;
       } else {
@@ -468,7 +833,9 @@ export const Storage = {
     return { suggestion, type, last, history };
   },
 
-  // --- Body Measurements ---
+  // =============================================
+  // Body Measurements
+  // =============================================
   getBodyMeasurements() {
     return this._get(this.KEYS.MEASUREMENTS) || [];
   },
@@ -485,7 +852,9 @@ export const Storage = {
     return all;
   },
 
-  // --- Programs (Multi-Week) ---
+  // =============================================
+  // Programs (Multi-Week)
+  // =============================================
   getPrograms() {
     return this._get(this.KEYS.PROGRAMS) || [];
   },
@@ -512,7 +881,6 @@ export const Storage = {
   getNextProgramWorkout(program) {
     if (!program) return null;
 
-    // --- Rotation mode ---
     if (program.mode === 'rotation' && program.rotationRoutines && program.rotationRoutines.length) {
       const completed = (program.completedWorkouts || []).length;
       const nextIdx = completed % program.rotationRoutines.length;
@@ -534,15 +902,13 @@ export const Storage = {
       return { routine, isToday: canTrainToday, rotationIndex: nextIdx, totalRotations: program.rotationRoutines.length };
     }
 
-    // --- Weekly mode (original) ---
     if (!program.schedule || !program.schedule.length) return null;
-    const dayOfWeek = new Date().getDay(); // 0=Sun
+    const dayOfWeek = new Date().getDay();
     const todaySlot = program.schedule.find(s => s.day === dayOfWeek);
     if (todaySlot && todaySlot.routineId) {
       const routine = this.getRoutines().find(r => r.id === todaySlot.routineId);
       return routine ? { routine, slot: todaySlot, isToday: true } : null;
     }
-    // Find next scheduled day
     for (let offset = 1; offset <= 7; offset++) {
       const nextDay = (dayOfWeek + offset) % 7;
       const slot = program.schedule.find(s => s.day === nextDay);
@@ -561,7 +927,6 @@ export const Storage = {
     if (program.mode === 'rotation') {
       if (!program.completedWorkouts) program.completedWorkouts = [];
       program.completedWorkouts.push({ routineId, date: new Date().toISOString() });
-      // Check if we've completed a full cycle
       const cyclesDone = Math.floor(program.completedWorkouts.length / program.rotationRoutines.length);
       if (cyclesDone > 0 && program.completedWorkouts.length % program.rotationRoutines.length === 0) {
         program.currentWeek = Math.min(program.currentWeek + 1, program.weeks);
@@ -580,18 +945,16 @@ export const Storage = {
   getPhotos() {
     return this._get(this.KEYS.PHOTOS) || [];
   },
-  
+
   addPhoto(photo) {
     const photos = this.getPhotos();
     photos.push(photo);
     this._set(this.KEYS.PHOTOS, photos);
   },
-  
+
   deletePhoto(id) {
     let photos = this.getPhotos();
     photos = photos.filter(p => p.id !== id);
     this._set(this.KEYS.PHOTOS, photos);
   }
 };
-
-

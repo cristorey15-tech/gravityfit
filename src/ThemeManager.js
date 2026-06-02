@@ -107,9 +107,9 @@ class ThemeManager {
       root.style.setProperty(key, value);
     });
 
-    // Set body class for any remaining theme-dependent styles
-    document.body.className = theme;
-    document.body.classList.add(`theme-${theme}`);
+    // Set body class — preserve dark-mode and accent classes set by ProfileScreen
+    const existing = document.body.className.split(/\s+/).filter(c => c && c !== 'light' && c !== 'dark');
+    document.body.className = [...existing, theme].join(' ');
 
     // Update theme-color meta tag
     const metaTheme = document.querySelector('meta[name="theme-color"]');
