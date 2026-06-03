@@ -351,6 +351,7 @@ export const WorkoutScreen = {
     this.save();
     this.requestWakeLock();
     this.startAutoSave();
+    this._attachBeforeUnload();
     App.navigate('workout');
   },
 
@@ -378,6 +379,7 @@ export const WorkoutScreen = {
     this.save();
     this.requestWakeLock();
     this.startAutoSave();
+    this._attachBeforeUnload();
     App.navigate('workout');
   },
 
@@ -389,6 +391,7 @@ export const WorkoutScreen = {
       this.startTime = new Date(saved.startedAt).getTime();
       this.requestWakeLock();
       this.startAutoSave();
+      this._attachBeforeUnload();
     }
   },
 
@@ -1066,6 +1069,7 @@ export const WorkoutScreen = {
     this.activeWorkout = null;
     this.stopTimer();
     this.stopAutoSave();
+    this._detachBeforeUnload();
     this.releaseWakeLock(); // auto-save already flushed via stopAutoSave
     RestTimer.skip();
     
@@ -1284,6 +1288,7 @@ export const WorkoutScreen = {
     Storage.clearActiveWorkout();
     this.activeWorkout = null;
     this.stopTimer();
+    this._detachBeforeUnload();
     this.releaseWakeLock();
     RestTimer.skip();
     App.navigate('home');
@@ -1302,6 +1307,23 @@ export const WorkoutScreen = {
     if (!this.activeWorkout) return;
     if (this._saveTimeout) { clearTimeout(this._saveTimeout); this._saveTimeout = null; }
     Storage.saveActiveWorkout(this.activeWorkout);
+  },
+
+  _attachBeforeUnload() {
+    this._detachBeforeUnload();
+    this._beforeUnloadHandler = (e) => {
+      if (this.activeWorkout) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', this._beforeUnloadHandler);
+  },
+  _detachBeforeUnload() {
+    if (this._beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', this._beforeUnloadHandler);
+      this._beforeUnloadHandler = null;
+    }
   },
 
   startAutoSave() {

@@ -3,7 +3,7 @@
 // ============================================
 
 import { Storage } from '../storage.js';
-import { Icons } from '../components.js';
+import { Icons, Toast, Modal } from '../components.js';
 import { App } from '../app.js';
 
 export const HomeScreen = {
@@ -69,7 +69,7 @@ export const HomeScreen = {
 
         ${this.renderWeeklyChallenges()}
 
-        ${this.renderWeekSummary(comparison, user)}
+        ${this.renderWeekSummary(comparison, user, weekWorkouts)}
 
         ${lastWorkout ? `
         <div class="home-last-workout">
@@ -120,7 +120,7 @@ export const HomeScreen = {
     `;
   },
 
-  renderWeekSummary(c, user) {
+  renderWeekSummary(c, user, weekWorkouts) {
     // Show motivational phrase
     const motivations = [
       { min: 0, phrase: '¡Empieza la semana con todo! 🚀' },
@@ -155,7 +155,6 @@ export const HomeScreen = {
           </div>
         </div>
         ${(function(){
-          const weekWorkouts = Storage.getWorkoutsThisWeek();
           const mVol = {};
           weekWorkouts.forEach(w => {
             (w.exercises || []).forEach(ex => {
@@ -444,10 +443,7 @@ export const HomeScreen = {
             <button class="btn btn-primary btn-block" onclick="Modal.hide()">🔥 ¡A por el siguiente mes!</button>
           </div>`;
         
-        // Use the existing Modal from window scope
-        if (window.Modal) {
-          window.Modal.show(html, { title: `📊 ${monthName}` });
-        }
+        Modal.show(html, { title: `📊 ${monthName}` });
       }, 2000);
     }, 3000);
   },
