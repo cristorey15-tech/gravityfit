@@ -14,6 +14,7 @@ export const WorkoutScreen = {
   startTime: null,
   wakeLock: null,
   _autoSaveInterval: null,
+  _saveTimeout: null,
 
   render() {
     const container = document.getElementById('screen-workout');
@@ -1065,7 +1066,7 @@ export const WorkoutScreen = {
     this.activeWorkout = null;
     this.stopTimer();
     this.stopAutoSave();
-    this.releaseWakeLock();
+    this.releaseWakeLock(); // auto-save already flushed via stopAutoSave
     RestTimer.skip();
     
     // Record rotation program progress
@@ -1279,25 +1280,37 @@ export const WorkoutScreen = {
   },
   cancelWorkout() {
     Modal.hide();
+    this.stopAutoSave(); // flush any pending save before clearing
     Storage.clearActiveWorkout();
     this.activeWorkout = null;
     this.stopTimer();
-    this.stopAutoSave();
     this.releaseWakeLock();
     RestTimer.skip();
     App.navigate('home');
   },
 
   save() {
-    if (this.activeWorkout) Storage.saveActiveWorkout(this.activeWorkout);
+    if (!this.activeWorkout) return;
+    if (this._saveTimeout) clearTimeout(this._saveTimeout);
+    this._saveTimeout = setTimeout(() => {
+      this._saveTimeout = null;
+      Storage.saveActiveWorkout(this.activeWorkout);
+    }, 1000);
+  },
+
+  saveNow() {
+    if (!this.activeWorkout) return;
+    if (this._saveTimeout) { clearTimeout(this._saveTimeout); this._saveTimeout = null; }
+    Storage.saveActiveWorkout(this.activeWorkout);
   },
 
   startAutoSave() {
     this.stopAutoSave();
-    this._autoSaveInterval = setInterval(() => this.save(), 30000);
+    this._autoSaveInterval = setInterval(() => this.saveNow(), 30000);
   },
   stopAutoSave() {
     if (this._autoSaveInterval) { clearInterval(this._autoSaveInterval); this._autoSaveInterval = null; }
+    if (this._saveTimeout) { clearTimeout(this._saveTimeout); this._saveTimeout = null; }
   },
 
   startTimer() {
