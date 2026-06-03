@@ -296,14 +296,14 @@ export const ProfileScreen = {
             </div>
             <span class="settings-item-value" id="storage-health-indicator" style="font-size:0.7rem;color:var(--color-accent)">Verificar</span>
           </div>
-          <div class="settings-item" onclick="ProfileScreen.downloadBackupFile()">
+          <div class="settings-item" onclick="ProfileScreen.exportData()">
             <div class="settings-item-left">
               <span style="font-size:1.2rem; margin-right:4px;">💾</span>
               <span class="settings-item-label">Descargar Respaldo Completo</span>
             </div>
             <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">JSON</span>
           </div>
-          <div class="settings-item" onclick="ProfileScreen.restoreBackupFile()">
+          <div class="settings-item" onclick="ProfileScreen.importData()">
             <div class="settings-item-left">
               <span style="font-size:1.2rem; margin-right:4px;">📥</span>
               <span class="settings-item-label">Restaurar desde Respaldo</span>
@@ -1234,6 +1234,60 @@ export const ProfileScreen = {
     } catch(e) {
       Toast.show(e.message, 'error');
     }
+  },
+
+  // --- Storage Health ---
+  async loadStorageHealth() {
+    try {
+      const status = await StorageHealth.check();
+      const summary = StorageHealth.getStatusSummary(status);
+      const statusEl = document.getElementById('storage-health-status');
+      const indicatorEl = document.getElementById('storage-health-indicator');
+      if (statusEl) statusEl.textContent = summary;
+      if (indicatorEl) {
+        if (status.overall === 'healthy') {
+          indicatorEl.textContent = '✅ OK';
+          indicatorEl.style.color = 'var(--color-success)';
+        } else if (status.overall === 'degraded') {
+          indicatorEl.textContent = '⚠️ Parcial';
+          indicatorEl.style.color = 'var(--color-warning)';
+        } else {
+          indicatorEl.textContent = '🚨 Crítico';
+          indicatorEl.style.color = 'var(--color-danger)';
+        }
+      }
+    } catch (e) {
+      console.error('StorageHealth check failed:', e);
+    }
+  },
+
+  async showStorageHealth() {
+    let status = StorageHealth.getLastStatus();
+    if (!status) {
+      await this.loadStorageHealth();
+      status = StorageHealth.getLastStatus();
+    }
+    if (status) {
+      this._showStorageHealthModal(status);
+    } else {
+      Toast.show('No se pudo verificar el almacenamiento', 'error');
+    }
+  },
+
+  async refreshStorageHealth() {
+    Modal.hide();
+    await this.loadStorageHealth();
+    const status = StorageHealth.getLastStatus();
+    if (status) this._showStorageHealthModal(status);
+  },
+
+  _showStorageHealthModal(status) {
+    const summary = StorageHealth.getStatusSummary(status);
+    Modal.show(
+      `<div style="white-space:pre-line;font-size:0.85rem;line-height:1.8;color:var(--color-text-secondary)">${summary}</div>
+       <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="ProfileScreen.refreshStorageHealth()">🔄 Actualizar</button>`,
+      { title: '🛡️ Estado del Almacenamiento' }
+    );
   },
 
   // --- FEATURE: QR Code Share ---
