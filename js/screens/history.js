@@ -317,8 +317,11 @@ export const HistoryScreen = {
     sorted.forEach(w => {
       const ex = (w.exercises || []).find(e => e.exerciseId === exId);
       if (ex) {
-        const maxW = Math.max(...(ex.sets || []).filter(s => s.completed).map(s => s.weight || 0));
-        if (maxW > 0) data.push(maxW);
+        const completedSets = (ex.sets || []).filter(s => s.completed);
+        if (completedSets.length > 0) {
+          const maxW = Math.max(...completedSets.map(s => s.weight || 0));
+          if (maxW > 0) data.push(maxW);
+        }
       }
     });
     if (data.length < 2) return;
@@ -407,9 +410,12 @@ export const HistoryScreen = {
       const grad = ctx.createLinearGradient(x, y, x, y + barH);
       grad.addColorStop(0, '#A3FF12');
       grad.addColorStop(1, 'rgba(163,255,18,0.3)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barH, 3);
+      ctx.fillStyle = grad;      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, barWidth, barH, 3);
+      } else {
+        ctx.rect(x, y, barWidth, barH);
+      }
       ctx.fill();
 
       // Value on top
@@ -621,8 +627,8 @@ export const HistoryScreen = {
         reps: s.reps,
         type: s.type || 'normal',
         completed: false
-      }))
-    }));        window.WorkoutScreen.activeWorkout = {
+      }))      }));
+        window.WorkoutScreen.activeWorkout = {
       name: original.name || 'Entrenamiento',
       exercises,
       startedAt: new Date().toISOString()
@@ -634,6 +640,17 @@ export const HistoryScreen = {
   },
 
   confirmDeleteWorkout(id) {
+    Modal.show(
+      `<p style="margin-bottom:16px;color:var(--color-text-secondary)">⚠️ ¿Eliminar este entrenamiento? Esta acción no se puede deshacer.</p>
+       <div style="display:flex;gap:12px">
+         <button class="btn btn-secondary flex-1" onclick="HistoryScreen.showWorkoutDetail('${id}')">Cancelar</button>
+         <button class="btn btn-danger flex-1" onclick="HistoryScreen.deleteWorkoutConfirmed('${id}')">Eliminar</button>
+       </div>`,
+      { title: '¿Eliminar entrenamiento?', center: true }
+    );
+  },
+
+  deleteWorkoutConfirmed(id) {
     Storage.deleteWorkout(id);
     Modal.hide();
     Toast.show('Entrenamiento eliminado');
