@@ -13,6 +13,7 @@ export const WorkoutScreen = {
   workoutTimer: null,
   startTime: null,
   wakeLock: null,
+  _autoSaveInterval: null,
 
   render() {
     const container = document.getElementById('screen-workout');
@@ -348,6 +349,7 @@ export const WorkoutScreen = {
     this.startTime = Date.now();
     this.save();
     this.requestWakeLock();
+    this.startAutoSave();
     App.navigate('workout');
   },
 
@@ -374,6 +376,7 @@ export const WorkoutScreen = {
     this.startTime = Date.now();
     this.save();
     this.requestWakeLock();
+    this.startAutoSave();
     App.navigate('workout');
   },
 
@@ -384,6 +387,7 @@ export const WorkoutScreen = {
       this.activeWorkout = saved;
       this.startTime = new Date(saved.startedAt).getTime();
       this.requestWakeLock();
+      this.startAutoSave();
     }
   },
 
@@ -824,6 +828,7 @@ export const WorkoutScreen = {
     
     this.save();
     this.requestWakeLock();
+    this.startAutoSave();
     App.navigate('workout');
     
     // Show exercise picker right away
@@ -856,6 +861,7 @@ export const WorkoutScreen = {
     
     this.save();
     this.requestWakeLock();
+    this.startAutoSave();
     App.navigate('workout');
     
     setTimeout(() => this.showExercisePicker(), 500);
@@ -1058,6 +1064,7 @@ export const WorkoutScreen = {
     Storage.clearActiveWorkout();
     this.activeWorkout = null;
     this.stopTimer();
+    this.stopAutoSave();
     this.releaseWakeLock();
     RestTimer.skip();
     
@@ -1275,6 +1282,7 @@ export const WorkoutScreen = {
     Storage.clearActiveWorkout();
     this.activeWorkout = null;
     this.stopTimer();
+    this.stopAutoSave();
     this.releaseWakeLock();
     RestTimer.skip();
     App.navigate('home');
@@ -1282,6 +1290,14 @@ export const WorkoutScreen = {
 
   save() {
     if (this.activeWorkout) Storage.saveActiveWorkout(this.activeWorkout);
+  },
+
+  startAutoSave() {
+    this.stopAutoSave();
+    this._autoSaveInterval = setInterval(() => this.save(), 30000);
+  },
+  stopAutoSave() {
+    if (this._autoSaveInterval) { clearInterval(this._autoSaveInterval); this._autoSaveInterval = null; }
   },
 
   startTimer() {
