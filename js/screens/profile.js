@@ -924,11 +924,14 @@ export const ProfileScreen = {
     const maxW = Math.max(...weights) * 1.02;
     const range = maxW - minW || 1;
     
+    const style = getComputedStyle(document.body);
+    const accent = style.getPropertyValue('--color-accent').trim() || '#A3FF12';
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // Line
     ctx.beginPath();
-    ctx.strokeStyle = '#A3FF12';
+    ctx.strokeStyle = accent;
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     
@@ -946,7 +949,7 @@ export const ProfileScreen = {
       const y = padding.top + h - ((d.weight - minW) / range) * h;
       ctx.beginPath();
       ctx.arc(x, y, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#A3FF12';
+      ctx.fillStyle = accent;
       ctx.fill();
     });
   },
@@ -1022,7 +1025,9 @@ export const ProfileScreen = {
     const barW = Math.min(w / vols.length * 0.7, 30);
     const gap = w / vols.length;
     
-    ctx.fillStyle = '#A3FF12';
+    const style = getComputedStyle(document.body);
+    const accent = style.getPropertyValue('--color-accent').trim() || '#A3FF12';
+    ctx.fillStyle = accent;
     vols.forEach((v, i) => {
       const barH = (v / maxVol) * h;
       const x = padding.left + gap * i + (gap - barW) / 2;
@@ -1148,12 +1153,21 @@ export const ProfileScreen = {
   },
 
   deletePhotoConfirm(id) {
-    const confirm = window.confirm('¿Estás seguro de que quieres eliminar esta foto?');
-    if (confirm) {
-      Storage.deletePhoto(id);
-      Toast.show('Foto eliminada');
-      this.showProgressGallery();
-    }
+    Modal.show(
+      `<p style="margin-bottom:16px;color:var(--color-text-secondary)">⚠️ ¿Eliminar esta foto? Esta acción no se puede deshacer.</p>
+       <div style="display:flex;gap:12px">
+         <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+         <button class="btn btn-danger flex-1" onclick="ProfileScreen.deletePhotoConfirmed('${id}')">Eliminar</button>
+       </div>`,
+      { title: '¿Eliminar foto?', center: true }
+    );
+  },
+
+  deletePhotoConfirmed(id) {
+    Storage.deletePhoto(id);
+    Modal.hide();
+    Toast.show('Foto eliminada');
+    this.showProgressGallery();
   },
 
   async forceSyncUp() {
@@ -1204,13 +1218,21 @@ export const ProfileScreen = {
       return;
     }
     
-    const confirm = window.confirm('¿Seguro que quieres importar? Esto SOBRESCRIBIRÁ tus entrenamientos locales actuales.');
-    if (!confirm) return;
+    Modal.show(
+      `<p style="margin-bottom:16px;color:var(--color-text-secondary)">⚠️ Esto SOBRESCRIBIRÁ tus entrenamientos locales actuales con los datos del código ingresado.</p>
+       <div style="display:flex;gap:12px">
+         <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+         <button class="btn btn-primary flex-1" onclick="ProfileScreen.confirmImportCloud('${token}')">Importar</button>
+       </div>`,
+      { title: '¿Importar y Sincronizar?', center: true }
+    );
+  },
 
+  async confirmImportCloud(token) {
+    Modal.hide();
     Toast.show('Descargando de la Nube...', 'info');
     try {
       await window.CloudSync.linkDevice(token);
-      Modal.hide();
       Toast.show('¡Sincronización Exitosa! 🎉', 'success');
       this.render();
     } catch(e) {

@@ -336,6 +336,9 @@ export const HistoryScreen = {
     const minVal = Math.min(...data) * 0.9;
     const range = maxVal - minVal || 1;
 
+    const style = getComputedStyle(document.body);
+    const accent = style.getPropertyValue('--color-accent').trim() || '#A3FF12';
+
     ctx.clearRect(0, 0, w, h);
 
     // Grid lines
@@ -358,8 +361,8 @@ export const HistoryScreen = {
 
     // Gradient fill
     const gradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
-    gradient.addColorStop(0, 'rgba(163,255,18,0.2)');
-    gradient.addColorStop(1, 'rgba(163,255,18,0)');
+    gradient.addColorStop(0, accent + '33');
+    gradient.addColorStop(1, accent + '00');
     ctx.beginPath();
     ctx.moveTo(points[0].x, h - padding.bottom);
     points.forEach(p => ctx.lineTo(p.x, p.y));
@@ -370,7 +373,7 @@ export const HistoryScreen = {
 
     // Line
     ctx.beginPath();
-    ctx.strokeStyle = '#A3FF12';
+    ctx.strokeStyle = accent;
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -381,7 +384,7 @@ export const HistoryScreen = {
     points.forEach(p => {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#A3FF12';
+      ctx.fillStyle = accent;
       ctx.fill();
       ctx.beginPath();
       ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
@@ -396,6 +399,9 @@ export const HistoryScreen = {
     const chartH = h - padding.top - padding.bottom;
     const maxVal = Math.max(...data, 1) * 1.2;
 
+    const barStyle = getComputedStyle(document.body);
+    const barAccent = barStyle.getPropertyValue('--color-accent').trim() || '#A3FF12';
+
     ctx.clearRect(0, 0, w, h);
 
     const barWidth = Math.min(chartW / data.length * 0.6, 30);
@@ -408,8 +414,8 @@ export const HistoryScreen = {
 
       // Bar with gradient
       const grad = ctx.createLinearGradient(x, y, x, y + barH);
-      grad.addColorStop(0, '#A3FF12');
-      grad.addColorStop(1, 'rgba(163,255,18,0.3)');
+      grad.addColorStop(0, barAccent);
+      grad.addColorStop(1, barAccent + '4D');
       ctx.fillStyle = grad;      ctx.beginPath();
       if (ctx.roundRect) {
         ctx.roundRect(x, y, barWidth, barH, 3);
