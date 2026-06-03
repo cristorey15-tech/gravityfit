@@ -296,12 +296,12 @@ export const ProfileScreen = {
             </div>
             <span class="settings-item-value" id="storage-health-indicator" style="font-size:0.7rem;color:var(--color-accent)">Verificar</span>
           </div>
-          <div class="settings-item" onclick="ProfileScreen.exportData()">
+          <div class="settings-item" onclick="ProfileScreen.showExportMenu()">
             <div class="settings-item-left">
               <span style="font-size:1.2rem; margin-right:4px;">💾</span>
               <span class="settings-item-label">Descargar Respaldo</span>
             </div>
-            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">JSON</span>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">JSON / CSV</span>
           </div>
           <div class="settings-item" onclick="ProfileScreen.importData()">
             <div class="settings-item-left">
@@ -568,6 +568,50 @@ export const ProfileScreen = {
     Toast.show('Peso guardado');
     Modal.hide();
     this.render();
+  },
+
+  showExportMenu() {
+    Modal.show(`
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-secondary flex-1" onclick="Modal.hide(); ProfileScreen.exportData()">
+          <div style="font-size:1.2rem;margin-bottom:4px">📋</div>
+          <div style="font-weight:600">JSON</div>
+          <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Respaldo completo</div>
+        </button>
+        <button class="btn btn-primary flex-1" onclick="Modal.hide(); ProfileScreen.exportCSV()">
+          <div style="font-size:1.2rem;margin-bottom:4px">📊</div>
+          <div style="font-weight:600">CSV</div>
+          <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Historial tabular</div>
+        </button>
+      </div>
+    `, { title: 'Exportar Datos', center: true });
+  },
+
+  exportCSV() {
+    const workouts = Storage.getWorkouts();
+    const user = Storage.getUser();
+    if (!workouts.length) { Toast.show('No hay entrenamientos para exportar', 'error'); return; }
+    const header = 'Fecha,Nombre,Volumen,Duration(min),Ejercicios,Intensidad,Notas';
+    const rows = workouts.map(w => {
+      const date = w.finishedAt ? new Date(w.finishedAt).toLocaleDateString('es-ES') : '';
+      const name = (w.name || '').replace(/,/g, ';');
+      const vol = Storage.getTotalVolume(w);
+      const dur = Math.round((w.duration || 0) / 60);
+      const exCount = (w.exercises || []).length;
+      const intensity = w.intensityScore || '';
+      const notes = (w.notes || '').replace(/,/g, ';').replace(/\n/g, ' ');
+      return `${date},${name},${vol},${dur},${exCount},${intensity},${notes}`;
+    });
+    const csv = header + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gravityfit-historial-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    Toast.show('CSV exportado 📊');
+    if (navigator.vibrate) navigator.vibrate(10);
   },
 
   exportData() {

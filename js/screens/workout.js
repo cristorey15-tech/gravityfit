@@ -91,13 +91,24 @@ export const WorkoutScreen = {
       const isLinkedToNext = ex.supersetId && exIdx < this.activeWorkout.exercises.length - 1 && this.activeWorkout.exercises[exIdx + 1].supersetId === ex.supersetId;
       const isLinkedToPrev = ex.supersetId && exIdx > 0 && this.activeWorkout.exercises[exIdx - 1].supersetId === ex.supersetId;
       
+      // Count exercises in this superset chain for Giant Set detection
+      let chainSize = 0;
+      if (isFirstInSuperset) {
+        for (let j = exIdx; j < this.activeWorkout.exercises.length; j++) {
+          if (this.activeWorkout.exercises[j].supersetId === ex.supersetId) chainSize++;
+          else break;
+        }
+      }
+      const isGiantSet = chainSize > 2;
+
       currentSupersetId = ex.supersetId || null;
 
       const linkBtn = exIdx > 0 ? `<button class="btn btn-ghost btn-icon sm" style="opacity: ${isLinkedToPrev ? '1;color:var(--color-accent)' : '0.3'};font-size:1.1rem;margin-right:-4px" onclick="WorkoutScreen.toggleSuperset(${exIdx})" title="Vincular con el anterior">🔗</button>` : '';
 
       if (isFirstInSuperset) {
+        const label = isGiantSet ? 'GIANT SET' : 'SUPERSET';
         html += `<div style="border-left:3px solid var(--color-accent);padding-left:12px;margin-left:2px;margin-bottom:16px;position:relative">
-                 <div style="position:absolute;left:-8px;top:50%;transform:translateY(-50%);font-size:0.6rem;background:var(--color-bg);color:var(--color-accent);padding:8px 0;writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:2px;font-weight:bold;border-radius:4px">SUPERSET</div>`;
+                 <div style="position:absolute;left:-8px;top:50%;transform:translateY(-50%);font-size:0.6rem;background:var(--color-bg);color:var(--color-accent);padding:8px 0;writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:2px;font-weight:bold;border-radius:4px">${label}</div>`;
       }
 
       html += `
@@ -1058,8 +1069,11 @@ export const WorkoutScreen = {
       finishedAt: now.toISOString(),
       duration,
       totalVolume: Storage.getTotalVolume(this.activeWorkout),
-      heartRateData: hrSummary
+      heartRateData: hrSummary,
+      intensityScore: this.calcIntensityScore(this.activeWorkout, duration),
+      notes: this._workoutNote || ''
     };
+    this._workoutNote = '';
     
     // Check if we should ask to update the original routine
     const hadChanges = workout.routineId && this._hasRoutineChanges(workout);
@@ -1207,15 +1221,19 @@ export const WorkoutScreen = {
         <h3 style="margin-bottom:4px;font-size:1.5rem">${w.name || 'Entrenamiento'}</h3>
         <p style="color:var(--color-text-secondary);font-size:0.875rem;margin-bottom:20px">${user.name} • GravityFit</p>
         
-        <div style="display:flex;gap:12px;justify-content:center;margin-bottom:20px">
-          <div style="background:var(--color-surface-hover);padding:12px;border-radius:12px;flex:1">
-            <div style="font-size:1.25rem;font-weight:bold;color:var(--color-text)">${HomeScreen.formatVolume(w.totalVolume, user.units)}</div>
-            <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-top:4px">VOLUMEN</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
+          <div style="background:var(--color-surface-hover);padding:10px 12px;border-radius:12px;flex:1;text-align:center">
+            <div style="font-size:1.1rem;font-weight:bold;color:var(--color-text)">${HomeScreen.formatVolume(w.totalVolume, user.units)}</div>
+            <div style="font-size:0.65rem;color:var(--color-text-secondary);margin-top:2px">VOLUMEN</div>
           </div>
-          <div style="background:var(--color-surface-hover);padding:12px;border-radius:12px;flex:1">
-            <div style="font-size:1.25rem;font-weight:bold;color:var(--color-text)">${this.formatTime(w.duration)}</div>
-            <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-top:4px">TIEMPO</div>
+          <div style="background:var(--color-surface-hover);padding:10px 12px;border-radius:12px;flex:1;text-align:center">
+            <div style="font-size:1.1rem;font-weight:bold;color:var(--color-text)">${this.formatTime(w.duration)}</div>
+            <div style="font-size:0.65rem;color:var(--color-text-secondary);margin-top:2px">TIEMPO</div>
           </div>
+          ${w.intensityScore ? `<div style="background:var(--color-surface-hover);padding:10px 12px;border-radius:12px;flex:1;text-align:center">
+            <div style="font-size:1.1rem;font-weight:bold;color:${w.intensityScore >= 70 ? 'var(--color-accent)' : w.intensityScore >= 40 ? 'var(--color-warning)' : 'var(--color-text-secondary)'}">${w.intensityScore}</div>
+            <div style="font-size:0.65rem;color:var(--color-text-secondary);margin-top:2px">INTENSIDAD</div>
+          </div>` : ''}
         </div>
         
         ${w.heartRateData ? `
@@ -1251,6 +1269,10 @@ export const WorkoutScreen = {
       <div style="display:flex;gap:12px">
         <button class="btn btn-secondary flex-1" onclick="Modal.hide(); if(typeof window.Gamification !== 'undefined' && window.WorkoutScreen.lastRewards && (window.WorkoutScreen.lastRewards.newLevel || window.WorkoutScreen.lastRewards.newBadges.length > 0)) { window.Gamification.showRewardsModal(window.WorkoutScreen.lastRewards); } else { window.App.navigate('home'); }">Ir a Inicio</button>
         <button class="btn btn-primary flex-1" onclick="WorkoutScreen.shareWorkout()">Compartir 📸</button>
+      </div>
+      <div style="margin-top:12px">
+        <textarea class="input" style="width:100%;height:60px;font-size:0.8125rem" placeholder="📝 Nota del entrenamiento (opcional)" id="workout-end-note">${w.notes || ''}</textarea>
+        <button class="btn btn-primary btn-block" style="margin-top:8px" onclick="WorkoutScreen.saveWorkoutNote('${w.id}')">💾 Guardar Nota</button>
       </div>
     `;
     Modal.show(html, { title: '¡Misión Cumplida!' });
@@ -1355,6 +1377,46 @@ export const WorkoutScreen = {
     const sec = s % 60;
     if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
     return `${m}:${sec.toString().padStart(2,'0')}`;
+  },
+
+  _workoutNote: '',
+
+  saveWorkoutNote(workoutId) {
+    const note = document.getElementById('workout-end-note')?.value || '';
+    const workouts = Storage.getWorkouts();
+    const idx = workouts.findIndex(w => w.id === workoutId);
+    if (idx !== -1) {
+      workouts[idx].notes = note;
+      Storage.saveWorkouts(workouts);
+      Toast.show('📝 Nota guardada', 'success');
+    }
+  },
+
+  calcIntensityScore(workout, durationSec) {
+    if (!workout || !workout.exercises || !workout.exercises.length || !durationSec) return 0;
+    let totalVol = 0;
+    let totalSets = 0;
+    let completedSets = 0;
+    workout.exercises.forEach(ex => {
+      (ex.sets || []).forEach(s => {
+        totalSets++;
+        if (s.completed) {
+          completedSets++;
+          totalVol += (s.weight || 0) * (s.reps || 0);
+        }
+      });
+    });
+    const durationMin = durationSec / 60;
+    if (durationMin === 0) return 0;
+    // Volume density: total volume per minute
+    const volDensity = totalVol / durationMin;
+    // Completion rate: % of sets completed
+    const completionRate = totalSets > 0 ? completedSets / totalSets : 0;
+    // Score: weighted combination normalized to 0-100
+    // volDensity ~200-2000 typical, normalize to ~0-1
+    const normDensity = Math.min(1, volDensity / 2000);
+    const score = Math.round((normDensity * 0.6 + completionRate * 0.4) * 100);
+    return Math.min(100, Math.max(0, score));
   },
 
   // Wake Lock — keep screen awake during active workout

@@ -69,6 +69,8 @@ export const HomeScreen = {
 
         ${this.renderWeeklyChallenges()}
 
+        ${this.renderFatigueWidget()}
+
         ${this.renderWeekSummary(comparison, user, weekWorkouts)}
 
         ${lastWorkout ? `
@@ -446,6 +448,38 @@ export const HomeScreen = {
         Modal.show(html, { title: `📊 ${monthName}` });
       }, 2000);
     }, 3000);
+  },
+
+  renderFatigueWidget() {
+    if (typeof window.AICoach === 'undefined') return '';
+    const fatigue = window.AICoach.getMuscleFatigue();
+    const entries = Object.entries(fatigue)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    if (!entries.length) return '';
+
+    const getBarColor = (v) => v > 75 ? 'var(--color-danger)' : v > 40 ? 'var(--color-warning)' : 'var(--color-success)';
+    const getLabel = (v) => v > 75 ? 'Alta' : v > 40 ? 'Media' : 'Baja';
+
+    return `
+      <div class="fatigue-widget" style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:12px;padding:16px;margin-bottom:16px">
+        <div class="home-section-title" style="margin-bottom:12px">
+          <span>🫀 Fatiga Muscular (72h)</span>
+        </div>
+        ${entries.map(([muscle, pct]) => `
+          <div style="margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px">
+              <span style="color:var(--color-text-secondary)">${muscle}</span>
+              <span style="color:${getBarColor(pct)};font-weight:600">${getLabel(pct)} · ${pct}%</span>
+            </div>
+            <div style="height:5px;background:var(--color-bg-input);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:${getBarColor(pct)};border-radius:3px;transition:width 0.8s ease"></div>
+            </div>
+          </div>
+        `).join('')}
+        <div style="font-size:0.65rem;color:var(--color-text-tertiary);margin-top:4px;text-align:center">Basado en volumen de los últimos 3 días</div>
+      </div>`;
   },
 
   renderActiveProgram() {
