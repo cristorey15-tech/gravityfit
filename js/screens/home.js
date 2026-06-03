@@ -496,8 +496,8 @@ export const HomeScreen = {
       + me('M56,40 L70,38 L84,40 L86,46 L82,50 L70,48 L58,50 L54,46 Z', 'trapecios')
       + me('M42,46 C36,46 30,50 30,58 C30,64 34,68 40,68 L50,62 L54,50 L48,46 Z', 'hombros')
       + me('M98,46 C104,46 110,50 110,58 C110,64 106,68 100,68 L90,62 L86,50 L92,46 Z', 'hombros')
-      + me('M54,50 C54,48 60,46 68,46 L70,46 C70,46 70,48 70,52 L70,70 C70,74 64,76 58,74 L54,70 L54,50 Z', 'pecho')
-      + me('M86,50 C86,48 80,46 72,46 L70,46 C70,46 70,48 70,52 L70,70 C70,74 76,76 82,74 L86,70 L86,50 Z', 'pecho')
+      + me('M54,50 C54,48 60,46 68,46 L70,46 C70,46 70,48 70,52 L70,70 C70,74 64,76 58,74 L54,70 L54,50 Z', 'pectorals')
+      + me('M86,50 C86,48 80,46 72,46 L70,46 C70,46 70,48 70,52 L70,70 C70,74 76,76 82,74 L86,70 L86,50 Z', 'pectorals')
       + me('M34,64 C30,66 26,72 26,80 C26,88 30,94 34,94 L42,92 L44,80 L44,68 Z', 'biceps')
       + me('M106,64 C110,66 114,72 114,80 C114,88 110,94 106,94 L98,92 L96,80 L96,68 Z', 'biceps')
       + me('M58,72 L82,72 L82,74 L70,76 L58,74 Z M58,78 L82,78 L82,96 L58,96 Z M58,98 L70,100 L70,118 L58,116 Z M70,100 L82,98 L82,116 L70,118 Z M58,120 L82,120 L80,136 L60,136 Z', 'core')
@@ -572,6 +572,74 @@ export const HomeScreen = {
       + pills + '\n'
       + '        <div style="font-size:0.55rem;color:var(--color-text-tertiary);margin-top:8px;text-align:center;opacity:0.7">Basado en volumen de los \u00FAltimos 3 d\u00EDas</div>\n'
       + '      </div>';
+  },
+
+  showMuscleDetail(muscleName) {
+    if (typeof window.AICoach === 'undefined') return;
+    const fatigue = window.AICoach.getMuscleFatigue();
+    const pct = fatigue[muscleName] || 0;
+    const exercises = window.AICoach.getMuscleExercises(muscleName);
+    const user = Storage.getUser();
+
+    const getColor = (p) => {
+      if (p <= 30) return '#22C55E';
+      if (p <= 60) return '#FBBF24';
+      return '#EF4444';
+    };
+    const color = getColor(pct);
+    const levelLabel = pct <= 30 ? '\u{1F7E2} Recuperado' : pct <= 60 ? '\u{1F7E1} Moderado' : '\u{1F534} Alta Fatiga';
+
+    const byWorkout = {};
+    exercises.forEach(ex => {
+      const key = ex.workoutName + '|' + ex.date;
+      if (!byWorkout[key]) byWorkout[key] = { name: ex.workoutName, date: ex.date, items: [] };
+      byWorkout[key].items.push(ex);
+    });
+
+    const formatTime = (dateStr) => {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      const diff = Math.floor((Date.now() - d) / (1000 * 60 * 60));
+      if (diff < 1) return 'hace minutos';
+      if (diff < 24) return 'hace ' + diff + 'h';
+      return 'hace ' + Math.floor(diff / 24) + 'd';
+    };
+
+    let html = '<div style="text-align:center;margin-bottom:16px">'
+      + '<div style="width:64px;height:64px;border-radius:50%;background:' + color + '22;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;border:2px solid ' + color + '">'
+      + '<span style="font-size:1.5rem;font-weight:bold;color:' + color + '">' + pct + '%</span></div>'
+      + '<h3 style="font-size:1.1rem;font-weight:700;margin-bottom:2px;text-transform:capitalize">' + muscleName + '</h3>'
+      + '<div style="font-size:0.8rem;color:' + color + '">' + levelLabel + '</div></div>';
+
+    if (exercises.length) {
+      html += '<div style="max-height:300px;overflow-y:auto">';
+      Object.values(byWorkout).forEach(group => {
+        html += '<div style="margin-bottom:12px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--color-border)">'
+          + '<span style="font-size:0.8rem;font-weight:600;color:var(--color-text)">' + group.name + '</span>'
+          + '<span style="font-size:0.65rem;color:var(--color-text-tertiary)">' + formatTime(group.date) + '</span></div>';
+        group.items.forEach(ex => {
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0">'
+            + '<div style="width:6px;height:6px;border-radius:50%;background:' + (ex.role === 'primary' ? color : 'var(--color-text-tertiary)') + ';flex-shrink:0"></div>'
+            + '<div style="flex:1;min-width:0">'
+            + '<div style="font-size:0.8rem;font-weight:500;color:var(--color-text)">' + ex.name + '</div>'
+            + '<div style="font-size:0.65rem;color:var(--color-text-tertiary)">' + ex.sets + '/' + ex.totalSets + ' series \u00B7 ' + HomeScreen.formatVolume(ex.volume, user.units) + ' \u00B7 ' + (ex.role === 'primary' ? 'M\u00FAsculo principal' : 'M\u00FAsculo secundario (40%)') + '</div>'
+            + '</div></div>';
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div style="text-align:center;padding:20px;color:var(--color-text-secondary)">'
+        + '<div style="font-size:2rem;margin-bottom:8px">\u{1F4AA}</div>'
+        + '<p style="font-size:0.85rem">No hay ejercicios recientes para este m\u00FAsculo</p>'
+        + '<p style="font-size:0.7rem;color:var(--color-text-tertiary)">Los datos aparecer\u00E1n despu\u00E9s de tu pr\u00F3ximo entrenamiento</p></div>';
+    }
+
+    html += '<div style="font-size:0.65rem;color:var(--color-text-tertiary);text-align:center;margin-top:8px">Ventana: \u00FAltimos 3 d\u00EDas \u00B7 La fatiga decae con el tiempo</div>';
+
+    Modal.show(html, { title: '\u{1FAC0} ' + muscleName.charAt(0).toUpperCase() + muscleName.slice(1) });
+    if (navigator.vibrate) navigator.vibrate(10);
   },
 
   renderActiveProgram() {
