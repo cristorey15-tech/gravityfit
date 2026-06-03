@@ -456,7 +456,7 @@ export const HomeScreen = {
     const entries = Object.entries(fatigue)
       .filter(([, v]) => v > 0)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+      .slice(0, 6);
     if (!entries.length) return '';
 
     const getBarColor = (v) => v > 75 ? 'var(--color-danger)' : v > 40 ? 'var(--color-warning)' : 'var(--color-success)';

@@ -24,12 +24,18 @@ export const AICoach = {
         (w.exercises || []).forEach(ex => {
           const exData = Storage.getExercise(ex.exerciseId);
           if (exData && exData.primaryMuscle) {
-            const m = exData.primaryMuscle;
             const volume = (ex.sets || []).reduce((sum, s) => sum + ((s.weight || 0) * (s.reps || 0)), 0);
-            
-            // Impacto = volumen * factor de fatiga. Normalizado arbitrariamente dividiendo por 1000.
             const impact = (volume / 1000) * fatigueFactor;
-            fatigue[m] = (fatigue[m] || 0) + impact;
+            
+            // Primary muscle gets full impact
+            fatigue[exData.primaryMuscle] = (fatigue[exData.primaryMuscle] || 0) + impact;
+            
+            // Secondary muscles get 40% impact (they assist but don't bear full load)
+            if (exData.secondaryMuscles && exData.secondaryMuscles.length) {
+              exData.secondaryMuscles.forEach(sm => {
+                fatigue[sm] = (fatigue[sm] || 0) + impact * 0.4;
+              });
+            }
           }
         });
       }
