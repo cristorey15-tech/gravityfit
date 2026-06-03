@@ -50,6 +50,64 @@ export const AICoach = {
     return fatigue;
   },
 
+  // 1b. Detalle de ejercicios que causaron fatiga en un músculo específico
+  getMuscleExercises(muscleName) {
+    const workouts = Storage.getWorkouts();
+    const now = Date.now();
+    const window72h = 72 * 60 * 60 * 1000;
+    const contributors = [];
+
+    workouts.forEach(w => {
+      const wDate = new Date(w.finishedAt).getTime();
+      if (now - wDate > window72h) return;
+
+      const hoursAgo = (now - wDate) / (1000 * 60 * 60);
+      const fatigueFactor = Math.max(0, 1 - (hoursAgo / 72));
+
+      (w.exercises || []).forEach(ex => {
+        const exData = Storage.getExercise(ex.exerciseId);
+        if (!exData) return;
+
+        const volume = (ex.sets || []).reduce((sum, s) => sum + ((s.weight || 0) * (s.reps || 0)), 0);
+        const impact = (volume / 1000) * fatigueFactor;
+
+        if (exData.primaryMuscle === muscleName) {
+          const completedSets = (ex.sets || []).filter(s => s.completed).length;
+          contributors.push({
+            name: exData.name,
+            workoutName: w.name || 'Entrenamiento',
+            date: w.finishedAt,
+            volume,
+            impact,
+            impactPct: 100,
+            sets: completedSets,
+            totalSets: (ex.sets || []).length,
+            role: 'primary'
+          });
+        }
+
+        if (exData.secondaryMuscles && exData.secondaryMuscles.includes(muscleName)) {
+          const completedSets = (ex.sets || []).filter(s => s.completed).length;
+          contributors.push({
+            name: exData.name,
+            workoutName: w.name || 'Entrenamiento',
+            date: w.finishedAt,
+            volume,
+            impact: impact * 0.4,
+            impactPct: 40,
+            sets: completedSets,
+            totalSets: (ex.sets || []).length,
+            role: 'secondary'
+          });
+        }
+      });
+    });
+
+    // Sort by impact descending
+    contributors.sort((a, b) => b.impact - a.impact);
+    return contributors;
+  },
+
   // 2. Estima el 1RM usando la fórmula de Epley: Peso * (1 + Reps / 30)
   estimate1RM(exerciseId) {
     const history = Storage.getExerciseHistory(exerciseId, 10); // Últimos 10 entrenos

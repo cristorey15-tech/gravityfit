@@ -455,96 +455,78 @@ export const HomeScreen = {
     const fatigue = window.AICoach.getMuscleFatigue();
     if (!Object.keys(fatigue).length) return '';
 
-    // Map muscle names to SVG region IDs and get fatigue color
+    // Fatigue color gradient: green → yellow → red
     const getFatigueColor = (pct) => {
       if (!pct || pct === 0) return 'rgba(255,255,255,0.06)';
-      // Gradient: green (0%) → yellow (50%) → red (100%)
       const r = pct <= 50 ? Math.round(255 * (pct / 50)) : 255;
       const g = pct <= 50 ? 200 : Math.round(200 * (1 - (pct - 50) / 50));
       const b = pct <= 50 ? Math.round(80 * (1 - pct / 50)) : 0;
       return `rgba(${r},${g},${b},${0.25 + (pct / 100) * 0.55})`;
     };
     const m = (name) => getFatigueColor(fatigue[name] || 0);
-    const f = (name) => fatigue[name] || 0;
+
+    // Helper: create a clickable muscle SVG element
+    const me = (tag, attrs, name) => `<${tag} ${attrs} fill="${m(name)}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" style="cursor:pointer" onclick="HomeScreen.showMuscleDetail('${name}')"/>`;
+    // Non-interactive element (head, hands, feet)
+    const ne = (tag, attrs) => `<${tag} ${attrs} fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>`;
+    const nf = (tag, attrs) => `<${tag} ${attrs} fill="rgba(255,255,255,0.06)"/>`;
 
     return `
       <div class="fatigue-widget" style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:12px;padding:16px;margin-bottom:16px">
         <div class="home-section-title" style="margin-bottom:8px">
           <span>🫀 Mapa de Fatiga (72h)</span>
+          <span style="font-size:0.6rem;color:var(--color-text-tertiary)">Toca un músculo para ver detalles</span>
         </div>
         <div style="display:flex;gap:8px;justify-content:center;align-items:flex-start">
           <!-- Front view -->
           <div style="text-align:center">
             <svg viewBox="0 0 120 220" width="100" height="180" style="display:block">
-              <!-- Head -->
-              <circle cx="60" cy="22" r="14" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>
-              <!-- Trapecios -->
-              <path d="M44,38 L60,36 L76,38 L72,48 L48,48 Z" fill="${m('trapecios')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Hombros -->
-              <ellipse cx="34" cy="52" rx="10" ry="7" fill="${m('hombros')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <ellipse cx="86" cy="52" rx="10" ry="7" fill="${m('hombros')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Pecho -->
-              <path d="M42,50 Q48,48 54,50 L54,68 Q48,72 42,68 Z" fill="${m('pecho')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M66,50 Q72,48 78,50 L78,68 Q72,72 66,68 Z" fill="${m('pecho')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Bíceps -->
-              <path d="M22,56 L32,54 L34,78 L24,80 Z" fill="${m('biceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M98,56 L88,54 L86,78 L96,80 Z" fill="${m('biceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Core -->
-              <rect x="42" y="70" width="36" height="32" rx="3" fill="${m('core')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Antebrazos -->
-              <path d="M16,82 L26,80 L24,112 L14,114 Z" fill="${m('antebrazos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M104,82 L94,80 L96,112 L106,114 Z" fill="${m('antebrazos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Cuádriceps -->
-              <path d="M40,106 L54,104 L52,160 L38,162 Z" fill="${m('cuadriceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M66,104 L80,106 L82,162 L68,160 Z" fill="${m('cuadriceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Abductores -->
-              <path d="M36,108 L40,106 L38,148 L34,150 Z" fill="${m('abductores')}" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
-              <path d="M84,106 L80,106 L82,148 L86,150 Z" fill="${m('abductores')}" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
-              <!-- Pantorrillas -->
-              <path d="M40,164 L50,162 L48,200 L38,202 Z" fill="${m('pantorrillas')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M70,162 L80,164 L82,202 L72,200 Z" fill="${m('pantorrillas')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Manos -->
-              <circle cx="12" cy="118" r="4" fill="rgba(255,255,255,0.06)"/>
-              <circle cx="108" cy="118" r="4" fill="rgba(255,255,255,0.06)"/>
-              <!-- Pies -->
-              <ellipse cx="42" cy="210" rx="7" ry="4" fill="rgba(255,255,255,0.06)"/>
-              <ellipse cx="78" cy="210" rx="7" ry="4" fill="rgba(255,255,255,0.06)"/>
+              ${ne('circle', 'cx="60" cy="22" r="14"')}
+              ${me('path', 'd="M44,38 L60,36 L76,38 L72,48 L48,48 Z"', 'trapecios')}
+              ${me('ellipse', 'cx="34" cy="52" rx="10" ry="7"', 'hombros')}
+              ${me('ellipse', 'cx="86" cy="52" rx="10" ry="7"', 'hombros')}
+              ${me('path', 'd="M42,50 Q48,48 54,50 L54,68 Q48,72 42,68 Z"', 'pecho')}
+              ${me('path', 'd="M66,50 Q72,48 78,50 L78,68 Q72,72 66,68 Z"', 'pecho')}
+              ${me('path', 'd="M22,56 L32,54 L34,78 L24,80 Z"', 'biceps')}
+              ${me('path', 'd="M98,56 L88,54 L86,78 L96,80 Z"', 'biceps')}
+              ${me('rect', 'x="42" y="70" width="36" height="32" rx="3"', 'core')}
+              ${me('path', 'd="M16,82 L26,80 L24,112 L14,114 Z"', 'antebrazos')}
+              ${me('path', 'd="M104,82 L94,80 L96,112 L106,114 Z"', 'antebrazos')}
+              ${me('path', 'd="M40,106 L54,104 L52,160 L38,162 Z"', 'cuadriceps')}
+              ${me('path', 'd="M66,104 L80,106 L82,162 L68,160 Z"', 'cuadriceps')}
+              ${me('path', 'd="M36,108 L40,106 L38,148 L34,150 Z"', 'abductores')}
+              ${me('path', 'd="M84,106 L80,106 L82,148 L86,150 Z"', 'abductores')}
+              ${me('path', 'd="M40,164 L50,162 L48,200 L38,202 Z"', 'pantorrillas')}
+              ${me('path', 'd="M70,162 L80,164 L82,202 L72,200 Z"', 'pantorrillas')}
+              ${nf('circle', 'cx="12" cy="118" r="4"')}
+              ${nf('circle', 'cx="108" cy="118" r="4"')}
+              ${nf('ellipse', 'cx="42" cy="210" rx="7" ry="4"')}
+              ${nf('ellipse', 'cx="78" cy="210" rx="7" ry="4"')}
             </svg>
             <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:2px">Frontal</div>
           </div>
           <!-- Back view -->
           <div style="text-align:center">
             <svg viewBox="0 0 120 220" width="100" height="180" style="display:block">
-              <!-- Head -->
-              <circle cx="60" cy="22" r="14" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>
-              <!-- Trapecios (back) -->
-              <path d="M44,36 L60,34 L76,36 L80,52 L40,52 Z" fill="${m('trapecios')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Hombros (back) -->
-              <ellipse cx="32" cy="50" rx="10" ry="7" fill="${m('hombros')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <ellipse cx="88" cy="50" rx="10" ry="7" fill="${m('hombros')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Espalda -->
-              <path d="M40,52 L80,52 L78,80 L42,80 Z" fill="${m('espalda')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Tríceps -->
-              <path d="M20,54 L32,52 L34,78 L22,80 Z" fill="${m('triceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M100,54 L88,52 L86,78 L98,80 Z" fill="${m('triceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Glúteos -->
-              <path d="M40,80 Q48,78 54,80 L54,100 Q48,104 42,100 Z" fill="${m('gluteos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M66,80 Q72,78 80,80 L78,100 Q72,104 66,100 Z" fill="${m('gluteos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Antebrazos (back) -->
-              <path d="M14,82 L24,80 L22,112 L12,114 Z" fill="${m('antebrazos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M106,82 L96,80 L98,112 L108,114 Z" fill="${m('antebrazos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Femorales -->
-              <path d="M40,104 L54,102 L52,158 L38,160 Z" fill="${m('femorales')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M66,102 L80,104 L82,160 L68,158 Z" fill="${m('femorales')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Pantorrillas (back) -->
-              <path d="M40,162 L50,160 L48,198 L38,200 Z" fill="${m('pantorrillas')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <path d="M70,160 L80,162 L82,200 L72,198 Z" fill="${m('pantorrillas')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
-              <!-- Manos -->
-              <circle cx="10" cy="118" r="4" fill="rgba(255,255,255,0.06)"/>
-              <circle cx="110" cy="118" r="4" fill="rgba(255,255,255,0.06)"/>
-              <!-- Pies -->
-              <ellipse cx="42" cy="210" rx="7" ry="4" fill="rgba(255,255,255,0.06)"/>
-              <ellipse cx="78" cy="210" rx="7" ry="4" fill="rgba(255,255,255,0.06)"/>
+              ${ne('circle', 'cx="60" cy="22" r="14"')}
+              ${me('path', 'd="M44,36 L60,34 L76,36 L80,52 L40,52 Z"', 'trapecios')}
+              ${me('ellipse', 'cx="32" cy="50" rx="10" ry="7"', 'hombros')}
+              ${me('ellipse', 'cx="88" cy="50" rx="10" ry="7"', 'hombros')}
+              ${me('path', 'd="M40,52 L80,52 L78,80 L42,80 Z"', 'espalda')}
+              ${me('path', 'd="M20,54 L32,52 L34,78 L22,80 Z"', 'triceps')}
+              ${me('path', 'd="M100,54 L88,52 L86,78 L98,80 Z"', 'triceps')}
+              ${me('path', 'd="M40,80 Q48,78 54,80 L54,100 Q48,104 42,100 Z"', 'gluteos')}
+              ${me('path', 'd="M66,80 Q72,78 80,80 L78,100 Q72,104 66,100 Z"', 'gluteos')}
+              ${me('path', 'd="M14,82 L24,80 L22,112 L12,114 Z"', 'antebrazos')}
+              ${me('path', 'd="M106,82 L96,80 L98,112 L108,114 Z"', 'antebrazos')}
+              ${me('path', 'd="M40,104 L54,102 L52,158 L38,160 Z"', 'femorales')}
+              ${me('path', 'd="M66,102 L80,104 L82,160 L68,158 Z"', 'femorales')}
+              ${me('path', 'd="M40,162 L50,160 L48,198 L38,200 Z"', 'pantorrillas')}
+              ${me('path', 'd="M70,160 L80,162 L82,200 L72,198 Z"', 'pantorrillas')}
+              ${nf('circle', 'cx="10" cy="118" r="4"')}
+              ${nf('circle', 'cx="110" cy="118" r="4"')}
+              ${nf('ellipse', 'cx="42" cy="210" rx="7" ry="4"')}
+              ${nf('ellipse', 'cx="78" cy="210" rx="7" ry="4"')}
             </svg>
             <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:2px">Posterior</div>
           </div>
@@ -558,11 +540,91 @@ export const HomeScreen = {
         ${Object.entries(fatigue).filter(([,v]) => v > 50).length ? `
         <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:4px">
           ${Object.entries(fatigue).filter(([,v]) => v > 50).sort((a,b) => b[1]-a[1]).map(([name, pct]) => `
-            <span style="font-size:0.65rem;padding:2px 8px;border-radius:8px;background:${getFatigueColor(pct)};color:var(--color-text)" title="${name}: ${pct}%">${name} ${pct}%</span>
+            <span style="font-size:0.65rem;padding:2px 8px;border-radius:8px;background:${getFatigueColor(pct)};color:var(--color-text);cursor:pointer" onclick="HomeScreen.showMuscleDetail('${name}')">${name} ${pct}%</span>
           `).join('')}
         </div>` : ''}
         <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:6px;text-align:center">Basado en volumen de los últimos 3 días</div>
       </div>`;
+  },
+
+  showMuscleDetail(muscleName) {
+    if (typeof window.AICoach === 'undefined') return;
+    const fatigue = window.AICoach.getMuscleFatigue();
+    const pct = fatigue[muscleName] || 0;
+    const exercises = window.AICoach.getMuscleExercises(muscleName);
+    const user = Storage.getUser();
+
+    // Color for header
+    const getColor = (p) => {
+      if (p <= 30) return '#22C55E';
+      if (p <= 60) return '#FBBF24';
+      return '#EF4444';
+    };
+    const color = getColor(pct);
+    const levelLabel = pct <= 30 ? '🟢 Recuperado' : pct <= 60 ? '🟡 Moderado' : '🔴 Alta Fatiga';
+
+    // Group exercises by workout
+    const byWorkout = {};
+    exercises.forEach(ex => {
+      const key = `${ex.workoutName}|${ex.date}`;
+      if (!byWorkout[key]) byWorkout[key] = { name: ex.workoutName, date: ex.date, items: [] };
+      byWorkout[key].items.push(ex);
+    });
+
+    const formatTime = (dateStr) => {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diff = Math.floor((now - d) / (1000 * 60 * 60));
+      if (diff < 1) return 'hace minutos';
+      if (diff < 24) return `hace ${diff}h`;
+      return `hace ${Math.floor(diff / 24)}d`;
+    };
+
+    const html = `
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="width:64px;height:64px;border-radius:50%;background:${color}22;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;border:2px solid ${color}">
+          <span style="font-size:1.5rem;font-weight:bold;color:${color}">${pct}%</span>
+        </div>
+        <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:2px;text-transform:capitalize">${muscleName}</h3>
+        <div style="font-size:0.8rem;color:${color}">${levelLabel}</div>
+      </div>
+
+      ${exercises.length ? `
+        <div style="max-height:300px;overflow-y:auto">
+          ${Object.values(byWorkout).map(group => `
+            <div style="margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--color-border)">
+                <span style="font-size:0.8rem;font-weight:600;color:var(--color-text)">${group.name}</span>
+                <span style="font-size:0.65rem;color:var(--color-text-tertiary)">${formatTime(group.date)}</span>
+              </div>
+              ${group.items.map(ex => `
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0">
+                  <div style="width:6px;height:6px;border-radius:50%;background:${ex.role === 'primary' ? color : 'var(--color-text-tertiary)'};flex-shrink:0"></div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:0.8rem;font-weight:500;color:var(--color-text)">${ex.name}</div>
+                    <div style="font-size:0.65rem;color:var(--color-text-tertiary)">${ex.sets}/${ex.totalSets} series · ${HomeScreen.formatVolume(ex.volume, user.units)} · ${ex.role === 'primary' ? 'Músculo principal' : 'Músculo secundario (40%)'}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+      ` : `
+        <div style="text-align:center;padding:20px;color:var(--color-text-secondary)">
+          <div style="font-size:2rem;margin-bottom:8px">💪</div>
+          <p style="font-size:0.85rem">No hay ejercicios recientes para este músculo</p>
+          <p style="font-size:0.7rem;color:var(--color-text-tertiary)">Los datos aparecerán después de tu próximo entrenamiento</p>
+        </div>
+      `}
+
+      <div style="font-size:0.65rem;color:var(--color-text-tertiary);text-align:center;margin-top:8px">
+        Ventana: últimos 3 días · La fatiga decae con el tiempo
+      </div>
+    `;
+
+    Modal.show(html, { title: `🫀 ${muscleName.charAt(0).toUpperCase() + muscleName.slice(1)}` });
+    if (navigator.vibrate) navigator.vibrate(10);
   },
 
   renderActiveProgram() {
