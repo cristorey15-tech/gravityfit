@@ -453,32 +453,115 @@ export const HomeScreen = {
   renderFatigueWidget() {
     if (typeof window.AICoach === 'undefined') return '';
     const fatigue = window.AICoach.getMuscleFatigue();
-    const entries = Object.entries(fatigue)
-      .filter(([, v]) => v > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-    if (!entries.length) return '';
+    if (!Object.keys(fatigue).length) return '';
 
-    const getBarColor = (v) => v > 75 ? 'var(--color-danger)' : v > 40 ? 'var(--color-warning)' : 'var(--color-success)';
-    const getLabel = (v) => v > 75 ? 'Alta' : v > 40 ? 'Media' : 'Baja';
+    // Map muscle names to SVG region IDs and get fatigue color
+    const getFatigueColor = (pct) => {
+      if (!pct || pct === 0) return 'rgba(255,255,255,0.06)';
+      // Gradient: green (0%) → yellow (50%) → red (100%)
+      const r = pct <= 50 ? Math.round(255 * (pct / 50)) : 255;
+      const g = pct <= 50 ? 200 : Math.round(200 * (1 - (pct - 50) / 50));
+      const b = pct <= 50 ? Math.round(80 * (1 - pct / 50)) : 0;
+      return `rgba(${r},${g},${b},${0.25 + (pct / 100) * 0.55})`;
+    };
+    const m = (name) => getFatigueColor(fatigue[name] || 0);
+    const f = (name) => fatigue[name] || 0;
 
     return `
       <div class="fatigue-widget" style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:12px;padding:16px;margin-bottom:16px">
-        <div class="home-section-title" style="margin-bottom:12px">
-          <span>🫀 Fatiga Muscular (72h)</span>
+        <div class="home-section-title" style="margin-bottom:8px">
+          <span>🫀 Mapa de Fatiga (72h)</span>
         </div>
-        ${entries.map(([muscle, pct]) => `
-          <div style="margin-bottom:8px">
-            <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:3px">
-              <span style="color:var(--color-text-secondary)">${muscle}</span>
-              <span style="color:${getBarColor(pct)};font-weight:600">${getLabel(pct)} · ${pct}%</span>
-            </div>
-            <div style="height:5px;background:var(--color-bg-input);border-radius:3px;overflow:hidden">
-              <div style="height:100%;width:${pct}%;background:${getBarColor(pct)};border-radius:3px;transition:width 0.8s ease"></div>
-            </div>
+        <div style="display:flex;gap:8px;justify-content:center;align-items:flex-start">
+          <!-- Front view -->
+          <div style="text-align:center">
+            <svg viewBox="0 0 120 220" width="100" height="180" style="display:block">
+              <!-- Head -->
+              <circle cx="60" cy="22" r="14" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>
+              <!-- Trapecios -->
+              <path d="M44,38 L60,36 L76,38 L72,48 L48,48 Z" fill="${m('trapecios')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Hombros -->
+              <ellipse cx="34" cy="52" rx="10" ry="7" fill="${m('hombros')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <ellipse cx="86" cy="52" rx="10" ry="7" fill="${m('hombros')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Pecho -->
+              <path d="M42,50 Q48,48 54,50 L54,68 Q48,72 42,68 Z" fill="${m('pecho')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M66,50 Q72,48 78,50 L78,68 Q72,72 66,68 Z" fill="${m('pecho')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Bíceps -->
+              <path d="M22,56 L32,54 L34,78 L24,80 Z" fill="${m('biceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M98,56 L88,54 L86,78 L96,80 Z" fill="${m('biceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Core -->
+              <rect x="42" y="70" width="36" height="32" rx="3" fill="${m('core')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Antebrazos -->
+              <path d="M16,82 L26,80 L24,112 L14,114 Z" fill="${m('antebrazos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M104,82 L94,80 L96,112 L106,114 Z" fill="${m('antebrazos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Cuádriceps -->
+              <path d="M40,106 L54,104 L52,160 L38,162 Z" fill="${m('cuadriceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M66,104 L80,106 L82,162 L68,160 Z" fill="${m('cuadriceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Abductores -->
+              <path d="M36,108 L40,106 L38,148 L34,150 Z" fill="${m('abductores')}" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
+              <path d="M84,106 L80,106 L82,148 L86,150 Z" fill="${m('abductores')}" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
+              <!-- Pantorrillas -->
+              <path d="M40,164 L50,162 L48,200 L38,202 Z" fill="${m('pantorrillas')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M70,162 L80,164 L82,202 L72,200 Z" fill="${m('pantorrillas')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Manos -->
+              <circle cx="12" cy="118" r="4" fill="rgba(255,255,255,0.06)"/>
+              <circle cx="108" cy="118" r="4" fill="rgba(255,255,255,0.06)"/>
+              <!-- Pies -->
+              <ellipse cx="42" cy="210" rx="7" ry="4" fill="rgba(255,255,255,0.06)"/>
+              <ellipse cx="78" cy="210" rx="7" ry="4" fill="rgba(255,255,255,0.06)"/>
+            </svg>
+            <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:2px">Frontal</div>
           </div>
-        `).join('')}
-        <div style="font-size:0.65rem;color:var(--color-text-tertiary);margin-top:4px;text-align:center">Basado en volumen de los últimos 3 días</div>
+          <!-- Back view -->
+          <div style="text-align:center">
+            <svg viewBox="0 0 120 220" width="100" height="180" style="display:block">
+              <!-- Head -->
+              <circle cx="60" cy="22" r="14" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>
+              <!-- Trapecios (back) -->
+              <path d="M44,36 L60,34 L76,36 L80,52 L40,52 Z" fill="${m('trapecios')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Hombros (back) -->
+              <ellipse cx="32" cy="50" rx="10" ry="7" fill="${m('hombros')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <ellipse cx="88" cy="50" rx="10" ry="7" fill="${m('hombros')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Espalda -->
+              <path d="M40,52 L80,52 L78,80 L42,80 Z" fill="${m('espalda')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Tríceps -->
+              <path d="M20,54 L32,52 L34,78 L22,80 Z" fill="${m('triceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M100,54 L88,52 L86,78 L98,80 Z" fill="${m('triceps')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Glúteos -->
+              <path d="M40,80 Q48,78 54,80 L54,100 Q48,104 42,100 Z" fill="${m('gluteos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M66,80 Q72,78 80,80 L78,100 Q72,104 66,100 Z" fill="${m('gluteos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Antebrazos (back) -->
+              <path d="M14,82 L24,80 L22,112 L12,114 Z" fill="${m('antebrazos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M106,82 L96,80 L98,112 L108,114 Z" fill="${m('antebrazos')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Femorales -->
+              <path d="M40,104 L54,102 L52,158 L38,160 Z" fill="${m('femorales')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M66,102 L80,104 L82,160 L68,158 Z" fill="${m('femorales')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Pantorrillas (back) -->
+              <path d="M40,162 L50,160 L48,198 L38,200 Z" fill="${m('pantorrillas')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <path d="M70,160 L80,162 L82,200 L72,198 Z" fill="${m('pantorrillas')}" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+              <!-- Manos -->
+              <circle cx="10" cy="118" r="4" fill="rgba(255,255,255,0.06)"/>
+              <circle cx="110" cy="118" r="4" fill="rgba(255,255,255,0.06)"/>
+              <!-- Pies -->
+              <ellipse cx="42" cy="210" rx="7" ry="4" fill="rgba(255,255,255,0.06)"/>
+              <ellipse cx="78" cy="210" rx="7" ry="4" fill="rgba(255,255,255,0.06)"/>
+            </svg>
+            <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:2px">Posterior</div>
+          </div>
+        </div>
+        <!-- Legend + top fatigued muscles -->
+        <div style="display:flex;justify-content:center;align-items:center;gap:12px;margin:8px 0;font-size:0.6rem;color:var(--color-text-tertiary)">
+          <span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:rgba(80,200,80,0.5)"></span> Recuperado</span>
+          <span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:rgba(255,180,0,0.5)"></span> Moderado</span>
+          <span style="display:flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:2px;background:rgba(255,50,50,0.6)"></span> Alto</span>
+        </div>
+        ${Object.entries(fatigue).filter(([,v]) => v > 50).length ? `
+        <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:4px">
+          ${Object.entries(fatigue).filter(([,v]) => v > 50).sort((a,b) => b[1]-a[1]).map(([name, pct]) => `
+            <span style="font-size:0.65rem;padding:2px 8px;border-radius:8px;background:${getFatigueColor(pct)};color:var(--color-text)" title="${name}: ${pct}%">${name} ${pct}%</span>
+          `).join('')}
+        </div>` : ''}
+        <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:6px;text-align:center">Basado en volumen de los últimos 3 días</div>
       </div>`;
   },
 
