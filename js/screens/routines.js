@@ -5,6 +5,7 @@
 import { Storage } from '../storage.js';
 import { Icons, Modal, Toast } from '../components.js';
 import { App } from '../app.js';
+import { Logger } from '../../src/Logger.js';
 
 export const RoutinesScreen = {
   render() {
@@ -118,6 +119,7 @@ export const RoutinesScreen = {
 
   showCreateForm() {
     this.builderExercises = [];
+    this._currentEditId = null;
     this.renderBuilder('Crear Rutina', '', null);
   },
 
@@ -125,6 +127,7 @@ export const RoutinesScreen = {
     const routine = Storage.getRoutine(id);
     if (!routine) return;
     this.builderExercises = [...routine.exercises];
+    this._currentEditId = id;
     this.renderBuilder('Editar Rutina', routine.name, id, routine.folder || '');
   },
 
@@ -315,15 +318,18 @@ export const RoutinesScreen = {
     document.getElementById('routine-ex-list').innerHTML = html;
   },
 
+  _currentEditId: null,
+
   addBuilderExercise(exerciseId) {
     this.builderExercises.push({ exerciseId, sets: 3, reps: 10, restSeconds: 90 });
-    // Go back to builder
+    // Go back to builder, preserving editId
     const name = document.getElementById('routine-name-input')?.value || '';
+    const folder = document.getElementById('routine-folder-input')?.value || '';
     Modal.hide();
     setTimeout(() => {
       this.renderBuilder(
-        this.builderExercises.length ? 'Editar Rutina' : 'Crear Rutina',
-        name, null
+        this._currentEditId ? 'Editar Rutina' : 'Crear Rutina',
+        name, this._currentEditId, folder
       );
     }, 100);
   },
@@ -472,9 +478,15 @@ export const RoutinesScreen = {
   copyCode() {
     const el = document.getElementById('export-code-textarea');
     if (el) {
-      el.select();
-      document.execCommand('copy');
-      Toast.show('Código copiado al portapapeles');
+      const text = el.value;
+      navigator.clipboard.writeText(text).then(() => {
+        Toast.show('Código copiado al portapapeles');
+      }).catch(() => {
+        // Fallback for older browsers
+        el.select();
+        document.execCommand('copy');
+        Toast.show('Código copiado al portapapeles');
+      });
     }
   },
 
@@ -901,8 +913,20 @@ export const RoutinesScreen = {
   },
 
   deleteProgram(id) {
+    Modal.show(
+      `<p style="margin-bottom:16px;color:var(--color-text-secondary)">¿Estás seguro de que deseas eliminar este programa?</p>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+        <button class="btn btn-danger flex-1" onclick="RoutinesScreen.deleteProgramConfirmed('${id}')">Eliminar</button>
+      </div>`,
+      { title: 'Eliminar Programa', center: true }
+    );
+  },
+
+  deleteProgramConfirmed(id) {
     Storage.deleteProgram(id);
     Toast.show('Programa eliminado');
+    Modal.hide();
     this.render();
   },
 
