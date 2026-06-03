@@ -7,6 +7,31 @@ import { Icons, Toast, Modal } from '../components.js';
 import { App } from '../app.js';
 
 export const HomeScreen = {
+  // DB muscle key → Spanish display name (single source of truth)
+  MUSCLE_LABELS: {
+    'abductores': 'Abductores',
+    'adductors': 'Aductores',
+    'antebrazos': 'Antebrazos',
+    'biceps': 'Bíceps',
+    'cardio': 'Cardio',
+    'core': 'Core',
+    'cuadriceps': 'Cuádriceps',
+    'espalda': 'Espalda',
+    'espalda alta': 'Espalda Alta',
+    'femorales': 'Femorales',
+    'gluteos': 'Glúteos',
+    'hombros': 'Hombros',
+    'levator-scapulae': 'Elevador Escápula',
+    'pantorrillas': 'Pantorrillas',
+    'pectorals': 'Pecho',
+    'serratus-anterior': 'Serrato Anterior',
+    'spine': 'Columna',
+    'trapecios': 'Trapecios',
+    'triceps': 'Tríceps'
+  },
+  muscleLabel(key) {
+    return this.MUSCLE_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1);
+  },
   render() {
     const user = Storage.getUser();
     const weeklyGoal = user.weeklyGoal || 4;
@@ -542,7 +567,7 @@ export const HomeScreen = {
     const highFatigue = Object.entries(fatigue).filter(([,v]) => v > 50).sort((a,b) => b[1]-a[1]);
     const pills = highFatigue.length
       ? '<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:6px">'
-          + highFatigue.map(([n, p]) => '<span style="font-size:0.65rem;padding:3px 10px;border-radius:10px;background:' + getFatigueColor(p) + ';color:var(--color-text);cursor:pointer;font-weight:500" onclick="HomeScreen.showMuscleDetail(\'' + n + '\')">' + n + ' ' + p + '%</span>').join('')
+          + highFatigue.map(([n, p]) => '<span style="font-size:0.65rem;padding:3px 10px;border-radius:10px;background:' + getFatigueColor(p) + ';color:var(--color-text);cursor:pointer;font-weight:500" onclick="HomeScreen.showMuscleDetail(\'' + n + '\')">' + HomeScreen.muscleLabel(n) + ' ' + p + '%</span>').join('')
           + '</div>'
       : '';
 
@@ -608,7 +633,7 @@ export const HomeScreen = {
     let html = '<div style="text-align:center;margin-bottom:16px">'
       + '<div style="width:64px;height:64px;border-radius:50%;background:' + color + '22;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;border:2px solid ' + color + '">'
       + '<span style="font-size:1.5rem;font-weight:bold;color:' + color + '">' + pct + '%</span></div>'
-      + '<h3 style="font-size:1.1rem;font-weight:700;margin-bottom:2px;text-transform:capitalize">' + muscleName + '</h3>'
+      + '<h3 style="font-size:1.1rem;font-weight:700;margin-bottom:2px">' + HomeScreen.muscleLabel(muscleName) + '</h3>'
       + '<div style="font-size:0.8rem;color:' + color + '">' + levelLabel + '</div></div>';
 
     if (exercises.length) {
@@ -638,7 +663,7 @@ export const HomeScreen = {
 
     html += '<div style="font-size:0.65rem;color:var(--color-text-tertiary);text-align:center;margin-top:8px">Ventana: \u00FAltimos 3 d\u00EDas \u00B7 La fatiga decae con el tiempo</div>';
 
-    Modal.show(html, { title: '\u{1FAC0} ' + muscleName.charAt(0).toUpperCase() + muscleName.slice(1) });
+    Modal.show(html, { title: '\u{1FAC0} ' + HomeScreen.muscleLabel(muscleName) });
     if (navigator.vibrate) navigator.vibrate(10);
   },
 
