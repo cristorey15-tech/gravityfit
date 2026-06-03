@@ -285,7 +285,7 @@ export const ProfileScreen = {
         </div>
 
         <div class="settings-group">
-          <div class="settings-group-title">🛡️ Protección de Datos</div>
+          <div class="settings-group-title">🛡️ Datos y Respaldo</div>
           <div id="storage-health-status" style="padding:12px;margin:0 0 8px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:8px;font-size:0.75rem;color:var(--color-text-secondary);line-height:1.6;white-space:pre-line">
             ⏳ Verificando estado del almacenamiento...
           </div>
@@ -299,7 +299,7 @@ export const ProfileScreen = {
           <div class="settings-item" onclick="ProfileScreen.exportData()">
             <div class="settings-item-left">
               <span style="font-size:1.2rem; margin-right:4px;">💾</span>
-              <span class="settings-item-label">Descargar Respaldo Completo</span>
+              <span class="settings-item-label">Descargar Respaldo</span>
             </div>
             <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">JSON</span>
           </div>
@@ -309,24 +309,6 @@ export const ProfileScreen = {
               <span class="settings-item-label">Restaurar desde Respaldo</span>
             </div>
             <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">Importar</span>
-          </div>
-        </div>
-
-        <div class="settings-group">
-          <div class="settings-group-title">Datos Locales</div>
-          <div class="settings-item" onclick="ProfileScreen.exportData()">
-            <div class="settings-item-left">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span class="settings-item-label">Exportar Datos</span>
-            </div>
-            <span class="settings-item-value">JSON</span>
-          </div>
-          <div class="settings-item" onclick="ProfileScreen.importData()">
-            <div class="settings-item-left">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              <span class="settings-item-label">Importar Datos</span>
-            </div>
-            <span class="settings-item-value">JSON</span>
           </div>
           <div class="settings-item" onclick="ProfileScreen.confirmReset()" style="border-color:rgba(248,113,113,0.2)">
             <div class="settings-item-left">
