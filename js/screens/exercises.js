@@ -133,6 +133,12 @@ export const ExercisesScreen = {
     this.searchQuery = q;
     this.renderLimit = 50;
     this.render();
+    // Restore focus and cursor position after full re-render
+    const input = document.querySelector('#screen-exercises .search-bar input');
+    if (input) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
   },
 
   filter(muscle) {
