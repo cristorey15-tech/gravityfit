@@ -483,14 +483,14 @@ export const HomeScreen = {
 
     const me = (d, name, extra) => {
       const pct = fatigue[name] || 0;
-      const glow = pct > 60 ? 'filter="url(#glow)"' : '';
+      const glow = pct > 60 ? 'filter="url(#glow-1)"' : '';
       return '<path d="' + d + '" fill="' + mf(name) + '" stroke="rgba(255,255,255,' + (pct > 0 ? 0.2 : 0.08) + ')" stroke-width="0.6" stroke-linejoin="round" style="cursor:pointer;transition:opacity 0.2s" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1" onclick="HomeScreen.showMuscleDetail(\'' + name + '\')" ' + (extra || '') + ' ' + glow + '/>';
     };
     const ne = (d) => '<path d="' + d + '" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" stroke-linejoin="round"/>';
     const bo = (d) => '<path d="' + d + '" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1" stroke-linejoin="round"/>';
 
     const frontView = '<svg viewBox="0 0 140 260" width="110" height="200" style="display:block">'
-      + '<defs><filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
+      + '<defs><filter id="glow-1"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
       + bo('M70,8 C78,8 84,14 84,24 C84,34 78,42 74,44 L82,48 C92,48 100,52 100,58 L104,78 C108,88 106,96 102,100 L94,114 L90,132 L84,140 L78,142 L82,168 C84,188 86,208 84,224 L82,244 C82,250 78,256 74,256 L66,256 C62,256 58,250 58,244 L56,224 C54,208 56,188 58,168 L62,142 L56,140 L50,132 L46,114 L38,100 C34,96 32,88 36,78 L40,58 C40,52 48,48 58,48 L66,44 C62,42 56,34 56,24 C56,14 62,8 70,8 Z')
       + ne('M70,8 C80,8 87,16 87,26 C87,36 80,44 70,44 C60,44 53,36 53,26 C53,16 60,8 70,8 Z')
       + me('M56,40 L70,38 L84,40 L86,46 L82,50 L70,48 L58,50 L54,46 Z', 'trapecios')
@@ -515,7 +515,7 @@ export const HomeScreen = {
       + '</svg>';
 
     const backView = '<svg viewBox="0 0 140 260" width="110" height="200" style="display:block">'
-      + '<defs><filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
+      + '<defs><filter id="glow-2"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
       + bo('M70,8 C78,8 84,14 84,24 C84,34 78,42 74,44 L82,48 C92,48 100,52 100,58 L104,78 C108,88 106,96 102,100 L94,114 L90,132 L84,140 L78,142 L82,168 C84,188 86,208 84,224 L82,244 C82,250 78,256 74,256 L66,256 C62,256 58,250 58,244 L56,224 C54,208 56,188 58,168 L62,142 L56,140 L50,132 L46,114 L38,100 C34,96 32,88 36,78 L40,58 C40,52 48,48 58,48 L66,44 C62,42 56,34 56,24 C56,14 62,8 70,8 Z')
       + ne('M70,8 C80,8 87,16 87,26 C87,36 80,44 70,44 C60,44 53,36 53,26 C53,16 60,8 70,8 Z')
       + me('M56,38 L70,36 L84,38 L88,46 L90,54 L70,56 L50,54 L52,46 Z', 'trapecios')
