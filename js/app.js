@@ -10,11 +10,12 @@ import { RoutinesScreen } from './screens/routines.js';
 import { HistoryScreen } from './screens/history.js';
 import { ExercisesScreen } from './screens/exercises.js';
 import { ProfileScreen } from './screens/profile.js';
+import { CompetitionScreen } from './screens/competition.js';
 
 export const App = {
   deferredPrompt: null,
   currentScreen: 'home',
-  screenOrder: ['home', 'routines', 'workout', 'history', 'profile'],
+  screenOrder: ['home', 'routines', 'workout', 'history', 'exercises', 'profile', 'competition'],
   screens: {
     home: HomeScreen,
     workout: WorkoutScreen,
@@ -22,6 +23,7 @@ export const App = {
     history: HistoryScreen,
     exercises: ExercisesScreen,
     profile: ProfileScreen,
+    competition: CompetitionScreen,
   },
 
   async init() {
@@ -96,6 +98,37 @@ export const App = {
 
     // Periodic backup reminder (check once per session, ~5s after load)
     setTimeout(() => this.checkBackupReminder(), 5000);
+
+    // Record competition daily stats on app open
+    this.recordCompetitionStats();
+
+    // Start competition real-time notifications
+    if (typeof CompetitionNotifications !== 'undefined') {
+      CompetitionNotifications.init();
+    }
+
+    // P0-1: Initialize notification system
+    this.initNotifications();
+
+    // P0-2: Check for missed workouts on app open
+    this.checkMissedWorkouts();
+
+    // P0-7: Active rest day check
+    this.checkActiveRestDay();
+
+    // Listen for service worker messages
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data.type === 'CHECK_DAILY_REMINDER') {
+          this.sendDailyReminder();
+        }
+        if (e.data.type === 'NOTIFICATION_CLICK') {
+          if (e.data.action === 'start-workout') {
+            this.navigate('workout');
+          }
+        }
+      });
+    }
   },
 
   checkBackupReminder() {
@@ -223,6 +256,171 @@ export const App = {
   dismissRestDay() {
     const overlay = document.getElementById('rest-day-overlay');
     if (overlay) overlay.classList.remove('active');
+  },
+
+  // =============================================
+  // P0-1: Notification System
+  // =============================================
+  async initNotifications() {
+    const settings = Storage.getNotificationSettings();
+    if (!settings.enabled) return;
+    if ('Notification' in window) {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        this.scheduleDailyReminder(settings.time);
+      }
+    }
+  },
+
+  scheduleDailyReminder(timeStr) {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'SCHEDULE_DAILY_REMINDER' });
+    }
+  },
+
+  sendDailyReminder() {
+    const settings = Storage.getNotificationSettings();
+    if (!settings.enabled) return;
+    if (document.visibilityState !== 'hidden') return;
+    const program = Storage.getActiveProgram();
+    let body = 'No olvides tu entrenamiento de hoy. ¡Tú puedes! 💪';
+    if (program) {
+      const next = Storage.getNextProgramWorkout(program);
+      if (next && next.isToday && next.routine && next.routine.id !== 'rest') {
+        body = `Hoy toca: ${next.routine.name}. ¡A darle! 🏋️`;
+      } else if (Storage.isRestDay()) {
+        body = 'Hoy es día de descanso. Recupérate bien 😴';
+      }
+    }
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('🏋️ GravityFit', { body, icon: '/icons/icon-192.png', tag: 'daily-reminder' });
+    }
+  },
+
+  async requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      Toast.show('Las notificaciones no son compatibles con este navegador', 'error');
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    const settings = Storage.getNotificationSettings();
+    settings.enabled = perm === 'granted';
+    Storage.saveNotificationSettings(settings);
+    if (perm === 'granted') {
+      Toast.show('🔔 Notificaciones activadas', 'success');
+      this.scheduleDailyReminder(settings.time);
+    } else {
+      Toast.show('Notificaciones bloqueadas por el navegador', 'warning');
+    }
+  },
+
+  toggleNotifications() {
+    const settings = Storage.getNotificationSettings();
+    if (settings.enabled) {
+      settings.enabled = false;
+      Storage.saveNotificationSettings(settings);
+      Toast.show('Notificaciones desactivadas', 'info');
+    } else {
+      this.requestNotificationPermission();
+    }
+  },
+
+  // =============================================
+  // P0-2: Missed Workout Check
+  // =============================================
+  checkMissedWorkouts() {
+    const program = Storage.getActiveProgram();
+    if (!program) return;
+    Storage.clearOldMissed();
+    const missed = Storage.getMissedWorkouts();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Check if yesterday was a scheduled training day that was missed
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yDay = yesterday.getDay();
+    let wasScheduled = false;
+    let routineName = '';
+    if (program.mode === 'weekly' && program.schedule) {
+      const slot = program.schedule.find(s => s.day === yDay);
+      if (slot && slot.routineId) {
+        wasScheduled = true;
+        const routine = Storage.getRoutine(slot.routineId);
+        routineName = routine ? routine.name : 'Entrenamiento';
+      }
+    }
+    if (wasScheduled) {
+      const alreadyTracked = missed.some(m => {
+        const mDate = new Date(m.date);
+        return mDate.toDateString() === yesterday.toDateString();
+      });
+      const didTrain = Storage.getWorkouts().some(w => {
+        if (!w.finishedAt) return false;
+        return new Date(w.finishedAt).toDateString() === yesterday.toDateString();
+      });
+      if (!alreadyTracked && !didTrain) {
+        Storage.addMissedWorkout({ programId: program.id, routineName, wasScheduled: true });
+        setTimeout(() => {
+              Toast.show(`⚠️ Perdiste el entrenamiento de ayer: ${routineName}`, 'warning', 5000);
+        }, 3000);
+      }
+    }
+  },
+
+  // =============================================
+  // P0-7: Active Rest Day Check
+  // =============================================
+  checkActiveRestDay() {
+    if (!Storage.isRestDay()) return;
+    const settings = Storage.getNotificationSettings();
+    if (!settings.restDayTips) return;
+    setTimeout(() => {
+      Toast.show('😴 Hoy es día de descanso activo — tus músculos se recuperan', 'info', 4000);
+    }, 6000);
+  },
+
+  // =============================================
+  // P1-6: Get Adherence Stats
+  // =============================================
+  getAdherenceStats() {
+    const program = Storage.getActiveProgram();
+    if (!program) return null;
+    const adherence = Storage.getProgramAdherence(program);
+    const missed = Storage.getMissedWorkouts().filter(m => m.programId === program.id && !m.rescheduled && !m.skipped);
+    return { ...adherence, missedWorkouts: missed, program };
+  },
+
+  // =============================================
+  // Social Competition: Record Daily Stats
+  // =============================================
+  recordCompetitionStats() {
+    const comps = Storage.getCompetitions();
+    if (!comps.length) return;
+    const workouts = Storage.getWorkouts();
+    const user = Storage.getUser();
+    const today = Storage._localDateStr(new Date());
+    // Find workouts finished today
+    const todayWorkouts = workouts.filter(w => w.finishedAt && Storage._localDateStr(new Date(w.finishedAt)) === today);
+    const totalVol = todayWorkouts.reduce((s, w) => s + Storage.getTotalVolume(w), 0);
+    const totalDuration = todayWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
+    const streak = Storage.getStreak();
+    const stats = { workouts: todayWorkouts.length, volume: totalVol, duration: totalDuration, streak };
+    comps.forEach(c => {
+      Storage.recordCompetitionDay(c.id, stats);
+      // Push to Firebase shared competition node so real-time listeners work
+      if (typeof CloudSync !== 'undefined' && CloudSync.db && user.cloudId) {
+        try {
+          CloudSync.db.ref(`competitions/${c.id}/dailyStats/${today}/${user.cloudId}`).set({
+            name: user.name,
+            ...stats,
+          });
+        } catch (e) { /* non-critical */ }
+      }
+    });
+  },
+
+  navigateToCompetition() {
+    this.navigate('competition');
   }
 };
 

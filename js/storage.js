@@ -600,14 +600,38 @@ export const Storage = {
     current.setHours(0, 0, 0, 0);
     const todayStr = this._localDateStr(current);
     const dayMs = 86400000;
+    let missedDays = 0;
+    const MAX_GRACE = 1; // 1 day grace for active program users
+    const hasActiveProgram = !!this.getActiveProgram();
     for (let i = 0; i < 365; i++) {
       const dayStr = i === 0 ? todayStr : this._localDateStr(current);
       const hasWorkout = workouts.some(w => w.finishedAt && this._localDateStr(new Date(w.finishedAt)) === dayStr);
       if (hasWorkout) { streak++; }
-      else if (i > 0) { break; }
+      else if (i === 0) {
+        // Today has no workout yet — don't break streak, just skip counting
+      } else if (hasActiveProgram && missedDays < MAX_GRACE) {
+        // Grace day: count it but note the miss
+        missedDays++;
+      } else { break; }
       current = new Date(current.getTime() - dayMs);
     }
     return streak;
+  },
+
+  // Check if today is a rest day for active program
+  isRestDay() {
+    const program = this.getActiveProgram();
+    if (!program) return false;
+    if (program.mode === 'rotation') {
+      const completed = (program.completedWorkouts || []).length;
+      const nextIdx = completed % (program.rotationRoutines || []).length;
+      return program.rotationRoutines[nextIdx] === 'rest';
+    }
+    if (program.mode === 'weekly' && program.schedule) {
+      const dayOfWeek = new Date().getDay();
+      return !program.schedule.find(s => s.day === dayOfWeek);
+    }
+    return false;
   },
   getPersonalRecords(exerciseId) {
     const workouts = this.getWorkouts();
@@ -853,6 +877,67 @@ export const Storage = {
   },
 
   // =============================================
+  // Missed Workout Tracking
+  // =============================================
+  getMissedWorkouts() {
+    return this._get('gf_missed_workouts') || [];
+  },
+  addMissedWorkout(data) {
+    const missed = this.getMissedWorkouts();
+    missed.push({ ...data, date: new Date().toISOString() });
+    this._set('gf_missed_workouts', missed);
+  },
+  clearOldMissed() {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const missed = this.getMissedWorkouts().filter(m => new Date(m.date) >= cutoff);
+    this._set('gf_missed_workouts', missed);
+  },
+  rescheduleMissed(missedIdx) {
+    const missed = this.getMissedWorkouts();
+    const item = missed[missedIdx];
+    if (!item) return null;
+    item.rescheduled = true;
+    this._set('gf_missed_workouts', missed);
+    return item;
+  },
+  skipMissed(missedIdx) {
+    const missed = this.getMissedWorkouts();
+    const item = missed[missedIdx];
+    if (!item) return;
+    item.skipped = true;
+    this._set('gf_missed_workouts', missed);
+  },
+
+  // =============================================
+  // Notification Settings
+  // =============================================
+  getNotificationSettings() {
+    return this._get('gf_notification_settings') || {
+      enabled: false,
+      time: '08:00',
+      restDayTips: true,
+      missedReminder: true,
+      competitionAlerts: true,
+    };
+  },
+  saveNotificationSettings(settings) {
+    this._set('gf_notification_settings', settings);
+  },
+
+  // =============================================
+  // Program Adherence
+  // =============================================
+  getProgramAdherence(program) {
+    if (!program) return { scheduled: 0, completed: 0, missed: 0, percentage: 0 };
+    const scheduled = (program.completedWorkouts || []).length;
+    const missed = this.getMissedWorkouts().filter(m => m.programId === program.id && !m.rescheduled).length;
+    const total = scheduled + missed;
+    const percentage = total > 0 ? Math.round((scheduled / total) * 100) : 100;
+    return { scheduled, completed: scheduled, missed, percentage };
+  },
+
+  // =============================================
   // Programs (Multi-Week)
   // =============================================
   getPrograms() {
@@ -956,5 +1041,233 @@ export const Storage = {
     let photos = this.getPhotos();
     photos = photos.filter(p => p.id !== id);
     this._set(this.KEYS.PHOTOS, photos);
-  }
+  },
+
+  // =============================================
+  // Social Competition System
+  // =============================================
+  getCompetitions() {
+    return this._get('gf_competitions') || [];
+  },
+  saveCompetitions(comps) {
+    this._set('gf_competitions', comps);
+  },
+  addCompetition(comp) {
+    const comps = this.getCompetitions();
+    comp.id = 'comp_' + Date.now();
+    comp.createdAt = new Date().toISOString();
+    comp.members = comp.members || [];
+    comp.dailyStats = {};
+    comps.push(comp);
+    this.saveCompetitions(comps);
+    return comp;
+  },
+  getCompetition(id) {
+    return this.getCompetitions().find(c => c.id === id) || null;
+  },
+  joinCompetition(code) {
+    try {
+      const decoded = JSON.parse(atob(code));
+      if (!decoded.id || !decoded.name) return null;
+      let comp = this.getCompetition(decoded.id);
+      if (!comp) {
+        comp = this.addCompetition({ name: decoded.name, creator: decoded.creator, members: [] });
+      }
+      const user = this.getUser();
+      const alreadyMember = comp.members.find(m => m.userId === user.cloudId);
+      if (!alreadyMember) {
+        comp.members.push({ userId: user.cloudId, name: user.name, joinedAt: new Date().toISOString() });
+        this.saveCompetitions(this.getCompetitions());
+      }
+      return comp;
+    } catch(e) { return null; }
+  },
+  generateCompetitionCode(comp) {
+    return btoa(JSON.stringify({ id: comp.id, name: comp.name, creator: comp.creator || Storage.getUser().name }));
+  },
+  recordCompetitionDay(compId, stats) {
+    const comps = this.getCompetitions();
+    const comp = comps.find(c => c.id === compId);
+    if (!comp) return;
+    const user = this.getUser();
+    const today = this._localDateStr(new Date());
+    if (!comp.dailyStats) comp.dailyStats = {};
+    if (!comp.dailyStats[today]) comp.dailyStats[today] = {};
+    comp.dailyStats[today][user.cloudId] = {
+      name: user.name,
+      workouts: stats.workouts || 0,
+      volume: stats.volume || 0,
+      duration: stats.duration || 0,
+      streak: stats.streak || 0,
+    };
+    this.saveCompetitions(comps);
+  },
+  getCompetitionLeaderboard(compId, days = 7) {
+    const comp = this.getCompetition(compId);
+    if (!comp || !comp.dailyStats) return [];
+    const scores = {};
+    (comp.members || []).forEach(m => {
+      scores[m.userId] = { name: m.name, userId: m.userId, totalVolume: 0, totalWorkouts: 0, totalDuration: 0, days: 0 };
+    });
+    const now = new Date();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = this._localDateStr(d);
+      const dayStats = comp.dailyStats[key];
+      if (!dayStats) continue;
+      Object.entries(dayStats).forEach(([uid, stat]) => {
+        if (!scores[uid]) scores[uid] = { name: stat.name || uid, userId: uid, totalVolume: 0, totalWorkouts: 0, totalDuration: 0, days: 0 };
+        scores[uid].totalVolume += stat.volume || 0;
+        scores[uid].totalWorkouts += stat.workouts || 0;
+        scores[uid].totalDuration += stat.duration || 0;
+        scores[uid].days += 1;
+      });
+    }
+    return Object.values(scores).sort((a, b) => b.totalVolume - a.totalVolume);
+  },
+  getCompetitionDailyDetail(compId, dateStr) {
+    const comp = this.getCompetition(compId);
+    if (!comp || !comp.dailyStats || !comp.dailyStats[dateStr]) return [];
+    return Object.entries(comp.dailyStats[dateStr]).map(([uid, stat]) => ({ userId: uid, ...stat })).sort((a, b) => b.volume - a.volume);
+  },
+
+  // =============================================
+  // Direct Friendships
+  // =============================================
+  getFriends() {
+    return this._get('gf_friends') || [];
+  },
+  saveFriends(friends) {
+    this._set('gf_friends', friends);
+  },
+  addFriend(friend) {
+    const friends = this.getFriends();
+    const user = this.getUser();
+    // Don't add yourself
+    if (friend.userId === user.cloudId) return null;
+    // Don't duplicate
+    if (friends.find(f => f.userId === friend.userId)) return null;
+    const entry = {
+      userId: friend.userId,
+      name: friend.name || 'Amigo',
+      addedAt: new Date().toISOString(),
+    };
+    friends.push(entry);
+    this.saveFriends(friends);
+    return entry;
+  },
+  removeFriend(userId) {
+    const friends = this.getFriends().filter(f => f.userId !== userId);
+    this.saveFriends(friends);
+  },
+  generateFriendCode() {
+    const user = this.getUser();
+    return btoa(JSON.stringify({
+      type: 'friend',
+      userId: user.cloudId,
+      name: user.name,
+    }));
+  },
+  joinFriend(code) {
+    try {
+      const decoded = JSON.parse(atob(code));
+      if (decoded.type !== 'friend' || !decoded.userId || !decoded.name) return { error: 'invalid' };
+      const result = this.addFriend({ userId: decoded.userId, name: decoded.name });
+      if (!result) return { error: 'duplicate' };
+      return { friend: result };
+    } catch (e) { return { error: 'invalid' }; }
+  },
+  /**
+   * Calculate this week's stats for all friends + current user.
+   * Returns sorted array by volume descending.
+   */
+  getFriendsWeeklyComparison() {
+    const user = this.getUser();
+    const friends = this.getFriends();
+    if (!friends.length) return [];
+
+    // My weekly stats
+    const myWeek = this.getWorkoutsThisWeek();
+    const myVol = myWeek.reduce((s, w) => s + this.getTotalVolume(w), 0);
+    const myWorkouts = myWeek.length;
+    const myDuration = myWeek.reduce((s, w) => s + (w.duration || 0), 0);
+    const myStreak = this.getStreak();
+
+    // Collect friend stats from competitions dailyStats (only if they share a comp)
+    const comps = this.getCompetitions();
+    const today = this._localDateStr(new Date());
+    const startOfWeek = new Date();
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const results = [{
+      userId: user.cloudId,
+      name: user.name,
+      isMe: true,
+      workouts: myWorkouts,
+      volume: myVol,
+      duration: myDuration,
+      streak: myStreak,
+    }];
+
+    friends.forEach(friend => {
+      // Try to get friend stats from competition dailyStats
+      let fWorkouts = 0, fVolume = 0, fDuration = 0;
+      let found = false;
+
+      comps.forEach(comp => {
+        if (!comp.dailyStats) return;
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(startOfWeek);
+          d.setDate(d.getDate() + i);
+          const key = this._localDateStr(d);
+          const dayData = comp.dailyStats[key];
+          if (dayData && dayData[friend.userId]) {
+            const stat = dayData[friend.userId];
+            fWorkouts += stat.workouts || 0;
+            fVolume += stat.volume || 0;
+            fDuration += stat.duration || 0;
+            found = true;
+          }
+        }
+      });
+
+      results.push({
+        userId: friend.userId,
+        name: friend.name,
+        isMe: false,
+        workouts: fWorkouts,
+        volume: fVolume,
+        duration: fDuration,
+        streak: found ? undefined : null, // null = no data
+        lastSeen: friend.addedAt,
+      });
+    });
+
+    // Sort by volume (me always visible, friends sorted)
+    return results.sort((a, b) => b.volume - a.volume);
+  },
+
+  // =============================================
+  // Competition Notifications — Ranking Snapshots
+  // =============================================
+  getCompetitionRankingSnapshot(compId) {
+    return this._get('gf_comp_snapshot_' + compId) || {};
+  },
+  saveCompetitionRankingSnapshot(compId, snapshot) {
+    this._set('gf_comp_snapshot_' + compId, snapshot);
+  },
+  getCompetitionNotificationSettings() {
+    const settings = this.getNotificationSettings();
+    const alertsOn = settings.competitionAlerts !== false;
+    return {
+      enabled: alertsOn,
+      friendWorkout: alertsOn,
+      rankChange: alertsOn,
+      competitionStreaks: alertsOn,
+      rivalStreaks: alertsOn,
+      friendProgress: alertsOn,
+    };
+  },
 };

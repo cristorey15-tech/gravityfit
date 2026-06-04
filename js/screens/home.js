@@ -87,6 +87,7 @@ export const HomeScreen = {
             <span style="font-size:1.2rem">🧠</span> AI Coach
           </button>
         </div>
+        ${this.renderCompetitionWidget()}
         ${this.renderQuickActions(routines)}
         
 
@@ -824,6 +825,9 @@ export const HomeScreen = {
     const next = Storage.getNextProgramWorkout(program);
     const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     const weekPct = Math.min((program.currentWeek / program.weeks) * 100, 100);
+    const adherence = Storage.getProgramAdherence(program);
+    const missed = Storage.getMissedWorkouts().filter(m => m.programId === program.id && !m.rescheduled && !m.skipped);
+    const isRestDay = Storage.isRestDay();
     
     let nextLabel = '';
     if (next) {
@@ -836,6 +840,40 @@ export const HomeScreen = {
 
     const rotationDayLabel = (program.mode === 'rotation' && next) ? `Día ${next.rotationIndex + 1} de ${next.totalRotations}` : '';
 
+    // Adherence badge color
+    const adhColor = adherence.percentage >= 80 ? 'var(--color-success)' : adherence.percentage >= 50 ? 'var(--color-warning)' : 'var(--color-danger)';
+
+    // Missed workout reschedule prompt
+    let missedHtml = '';
+    if (missed.length > 0) {
+      const m = missed[0];
+      missedHtml = `
+        <div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:0.8rem">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="color:var(--color-warning)">⚠️ Perdiste: ${m.routineName}</span>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-primary btn-sm" style="font-size:0.7rem;padding:4px 8px" onclick="HomeScreen.rescheduleMissed(0)">Reprogramar</button>
+              <button class="btn btn-ghost btn-sm" style="font-size:0.7rem;padding:4px 8px" onclick="HomeScreen.skipMissed(0)">Omitir</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // Smart rest day content
+    let restDayHtml = '';
+    if (isRestDay) {
+      restDayHtml = `
+        <div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:0.75rem;color:var(--color-text-secondary)">
+          <div style="font-weight:600;color:var(--color-info);margin-bottom:4px">😴 Día de Recuperación Activa</div>
+          <div>Tus músculos se están reparando. Tips para hoy:</div>
+          <ul style="margin:4px 0 0 16px;padding:0;font-size:0.7rem">
+            <li>Estiramientos suaves 15-20 min</li>
+            <li>Caminata ligera 30 min</li>
+            <li>Hidratación y sueño de calidad</li>
+          </ul>
+        </div>`;
+    }
+
     return `
       <div class="program-card active-program" style="margin-top:12px">
         <div class="program-card-header">
@@ -843,6 +881,16 @@ export const HomeScreen = {
           <span class="program-week-badge">${program.mode === 'rotation' ? 'Rotación' : `Semana ${program.currentWeek}/${program.weeks}`}</span>
         </div>
         <div class="program-progress-bar"><div class="program-progress-fill" style="width:${weekPct}%"></div></div>
+        
+        <!-- P1-6: Adherence Widget -->
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:0.7rem">
+          <div style="background:${adhColor}22;color:${adhColor};padding:3px 8px;border-radius:10px;font-weight:600">📋 ${adherence.percentage}% adherencia</div>
+          <div style="color:var(--color-text-tertiary)">${adherence.completed} completados · ${adherence.missed} perdidos</div>
+        </div>
+
+        ${restDayHtml}
+        ${missedHtml}
+
         ${next ? (
           next.routine.id === 'rest' ? `
             <button class="btn btn-secondary btn-block" style="margin-top:8px" onclick="App.markRestDay()">
@@ -854,6 +902,54 @@ export const HomeScreen = {
             </button>
           `
         ) : '<div style="text-align:center;font-size:var(--font-size-sm);color:var(--color-text-secondary);margin-top:8px">No hay rutinas programadas</div>'}
+      </div>`;
+  },
+
+  rescheduleMissed(idx) {
+    const item = Storage.rescheduleMissed(idx);
+    if (item) {
+      Toast.show(`🔄 Reprogramado: ${item.routineName}`, 'success');
+      this.render();
+    }
+  },
+  skipMissed(idx) {
+    Storage.skipMissed(idx);
+    Toast.show('Entrenamiento omitido', 'info');
+    this.render();
+  },
+
+  renderCompetitionWidget() {
+    const comps = Storage.getCompetitions();
+    if (!comps.length) {
+      return `
+        <div style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all var(--transition-fast)" onclick="App.navigateToCompetition()">
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(251,191,36,0.1);display:flex;align-items:center;justify-content:center;font-size:1.1rem">🏆</div>
+          <div style="flex:1">
+            <div style="font-size:0.75rem;color:var(--color-text-tertiary)">Competencia</div>
+            <div style="font-size:0.85rem;color:var(--color-text-secondary)">¡Desafía a tus amigos!</div>
+          </div>
+          <div style="font-size:0.7rem;color:var(--color-accent)">Crear →</div>
+        </div>`;
+    }
+    const comp = comps[0];
+    const leaderboard = Storage.getCompetitionLeaderboard(comp.id, 7);
+    const user = Storage.getUser();
+    const myRank = leaderboard.findIndex(l => l.userId === user.cloudId) + 1;
+    const topUser = leaderboard[0];
+    return `
+      <div style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:12px;padding:12px 16px;margin-bottom:12px;cursor:pointer;transition:all var(--transition-fast)" onclick="App.navigateToCompetition()">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:36px;height:36px;border-radius:50%;background:rgba(251,191,36,0.1);display:flex;align-items:center;justify-content:center;font-size:1.1rem">🏆</div>
+          <div style="flex:1">
+            <div style="font-size:0.75rem;font-weight:600;color:var(--color-text)">${comp.name}</div>
+            <div style="font-size:0.65rem;color:var(--color-text-secondary)">${comp.members?.length || 0} miembros${myRank > 0 ? ` · Tu rank: #${myRank}` : ''}</div>
+          </div>
+          ${topUser ? `<div style="text-align:right">
+            <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Líder</div>
+            <div style="font-size:0.75rem;font-weight:600;color:var(--color-accent)">${topUser.name || '???'}</div>
+          </div>` : ''}
+          <div style="font-size:1rem;color:var(--color-text-tertiary)">→</div>
+        </div>
       </div>`;
   }
 };

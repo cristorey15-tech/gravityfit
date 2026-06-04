@@ -924,3 +924,48 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
+
+/* --- Competition Screen --- */
+.comp-rank-card {
+  transition: all var(--transition-fast);
+}
+.comp-rank-card:hover {
+  background: var(--color-bg-card-hover);
+}
+.comp-rank-card.me {
+  box-shadow: 0 0 16px rgba(163,255,18,0.08);
+}
+
+/* --- History Filter Bar --- */
+.history-filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.history-filter-bar .input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  padding: 6px 10px;
+}
+.history-filter-bar select {
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  flex-shrink: 0;
+}
+
+/* --- Improved Empty States --- */
+.empty-state-motivational {
+  text-align: center;
+  padding: 32px 16px;
+}
+.empty-state-motivational .empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+  animation: pulse 2s ease-in-out infinite;
+}
+.empty-state-motivational .empty-state-action {
+  margin-top: 16px;
+}

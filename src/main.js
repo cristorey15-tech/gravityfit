@@ -28,6 +28,8 @@ import { RoutinesScreen } from '../js/screens/routines.js';
 import { HistoryScreen } from '../js/screens/history.js';
 import { ExercisesScreen } from '../js/screens/exercises.js';
 import { ProfileScreen } from '../js/screens/profile.js';
+import { CompetitionScreen } from '../js/screens/competition.js';
+import { CompetitionNotifications } from '../js/competition-notifications.js';
 import { App } from '../js/app.js';
 
 // Attach everything to window for backwards compatibility with inline onclick handlers
@@ -52,6 +54,8 @@ window.RoutinesScreen = RoutinesScreen;
 window.HistoryScreen = HistoryScreen;
 window.ExercisesScreen = ExercisesScreen;
 window.ProfileScreen = ProfileScreen;
+window.CompetitionScreen = CompetitionScreen;
+window.CompetitionNotifications = CompetitionNotifications;
 window.App = App;
 window.Logger = Logger;
 window.themeManager = themeManager;

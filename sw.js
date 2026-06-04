@@ -98,6 +98,7 @@ self.addEventListener('fetch', (e) => {
 
 // Notification click handler
 self.addEventListener('notificationclick', (e) => {
+  const data = e.notification.data || {};
   e.notification.close();
   e.waitUntil(
     clients
@@ -105,6 +106,7 @@ self.addEventListener('notificationclick', (e) => {
       .then((windowClients) => {
         for (const client of windowClients) {
           if (client.url.includes(self.registration.scope) && 'focus' in client) {
+            client.postMessage({ type: 'NOTIFICATION_CLICK', action: data.action || 'open' });
             return client.focus();
           }
         }
@@ -113,6 +115,56 @@ self.addEventListener('notificationclick', (e) => {
         }
       })
   );
+});
+
+// Periodic background sync for daily notifications
+self.addEventListener('periodicsync', (e) => {
+  if (e.tag === 'daily-workout-reminder') {
+    e.waitUntil(sendDailyReminder());
+  }
+});
+
+async function sendDailyReminder() {
+  try {
+    const clients = await self.clients.matchAll();
+    if (clients.length > 0) {
+      // App is open, let it handle the notification
+      clients.forEach((client) => {
+        client.postMessage({ type: 'CHECK_DAILY_REMINDER' });
+      });
+    } else {
+      // App is closed, send notification directly
+      self.registration.showNotification('🏋️ GravityFit — ¡Hora de entrenar!', {
+        body: 'No olvides tu entrenamiento de hoy. ¡Tú puedes!',
+        icon: '/icons/icon-192.png',
+        badge: '/icon-192.png',
+        vibrate: [200, 100, 200],
+        tag: 'daily-reminder',
+        requireInteraction: true,
+        data: { action: 'start-workout' },
+        actions: [
+          { action: 'start', title: '🏋️ Entrenar' },
+          { action: 'dismiss', title: '⏰ Después' }
+        ]
+      });
+    }
+  } catch (e) {
+    console.error('Daily reminder failed:', e);
+  }
+}
+
+// Listen for notification actions from the client
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SCHEDULE_DAILY_REMINDER') {
+    // Register periodic sync if supported
+    if ('periodicSync' in self.registration) {
+      self.registration.periodicSync.register('daily-workout-reminder', {
+        minInterval: 24 * 60 * 60 * 1000 // 24 hours
+      }).catch(() => {
+        // Periodic sync not available, use regular sync
+      });
+    }
+  }
 });
 
 // Background sync for workouts

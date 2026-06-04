@@ -36,13 +36,68 @@ export const HistoryScreen = {
   // ==========================================
   // HISTORY TAB — Calendar + Workout list
   // ==========================================
+  _historyFilter: '',
+  _historyExerciseFilter: '',
+  _historyDateFrom: '',
+  _historyDateTo: '',
+
   renderHistory() {
-    const workouts = Storage.getWorkouts();
+    let workouts = Storage.getWorkouts();
     const user = Storage.getUser();
+    const allExercises = Storage.getAllExercises();
+
+    // Apply filters
+    if (this._historyFilter) {
+      const normalize = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const q = normalize(this._historyFilter);
+      workouts = workouts.filter(w => {
+        const name = normalize(w.name || '');
+        const exNames = (w.exercises || []).map(e => { const d = Storage.getExercise(e.exerciseId); return d ? normalize(d.name) : ''; }).join(' ');
+        return name.includes(q) || exNames.includes(q);
+      });
+    }
+    if (this._historyExerciseFilter) {
+      workouts = workouts.filter(w => (w.exercises || []).some(e => e.exerciseId === this._historyExerciseFilter));
+    }
+    if (this._historyDateFrom) {
+      const from = new Date(this._historyDateFrom);
+      workouts = workouts.filter(w => w.finishedAt && new Date(w.finishedAt) >= from);
+    }
+    if (this._historyDateTo) {
+      const to = new Date(this._historyDateTo);
+      to.setHours(23, 59, 59, 999);
+      workouts = workouts.filter(w => w.finishedAt && new Date(w.finishedAt) <= to);
+    }
+
+    // Get exercises used in workouts for filter dropdown
+    const usedExerciseIds = new Set();
+    Storage.getWorkouts().forEach(w => (w.exercises || []).forEach(e => usedExerciseIds.add(e.exerciseId)));
+    const usedExercises = [...usedExerciseIds].map(id => allExercises.find(e => e.id === id)).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+
+    const hasFilters = this._historyFilter || this._historyExerciseFilter || this._historyDateFrom || this._historyDateTo;
+
     return `
       <div class="history-calendar">${this.renderCalendar()}</div>
-      ${this.renderHeatmap(workouts)}
-      <h3 style="font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);margin:16px 0 12px">Entrenamientos</h3>
+      ${this.renderHeatmap(Storage.getWorkouts())}
+      
+      <!-- History Filters -->
+      <div class="history-filter-bar">
+        <input type="text" class="input" placeholder="🔍 Buscar..." value="${this._historyFilter}" 
+          oninput="HistoryScreen._historyFilter=this.value;HistoryScreen.render()" style="flex:2">
+        <select class="input" style="flex:1;font-size:0.75rem" onchange="HistoryScreen._historyExerciseFilter=this.value;HistoryScreen.render()">
+          <option value="">Todos los ejercicios</option>
+          ${usedExercises.map(e => `<option value="${e.id}" ${this._historyExerciseFilter === e.id ? 'selected' : ''}>${e.name}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="date" class="input" style="flex:1;font-size:0.75rem;padding:6px 8px" value="${this._historyDateFrom}"
+          onchange="HistoryScreen._historyDateFrom=this.value;HistoryScreen.render()" placeholder="Desde">
+        <input type="date" class="input" style="flex:1;font-size:0.75rem;padding:6px 8px" value="${this._historyDateTo}"
+          onchange="HistoryScreen._historyDateTo=this.value;HistoryScreen.render()" placeholder="Hasta">
+        ${hasFilters ? `<button class="btn btn-ghost btn-sm" onclick="HistoryScreen._historyFilter='';HistoryScreen._historyExerciseFilter='';HistoryScreen._historyDateFrom='';HistoryScreen._historyDateTo='';HistoryScreen.render()" style="font-size:0.75rem;color:var(--color-danger);white-space:nowrap">✕ Limpiar</button>` : ''}
+      </div>
+
+      <h3 style="font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);margin:0 0 12px">Entrenamientos ${workouts.length !== Storage.getWorkouts().length ? `<span style="font-size:0.75rem;color:var(--color-text-tertiary);font-weight:400">(${workouts.length} de ${Storage.getWorkouts().length})</span>` : ''}</h3>
       ${workouts.length ? workouts.map(w => {
         const exNames = (w.exercises || []).map(e => {
           const d = Storage.getExercise(e.exerciseId);

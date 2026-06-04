@@ -1093,6 +1093,20 @@ export const WorkoutScreen = {
     }
     
     this.checkAchievements(workout);
+    this._lastFinishedWorkout = workout || Storage.getWorkouts()[0];
+    
+    // Advance deload week counter so deload detection works
+    if (typeof window.AICoach !== 'undefined' && window.AICoach.incrementWeeksSinceDeload) {
+      window.AICoach.incrementWeeksSinceDeload();
+    }
+    
+    // Record competition stats + check for friend notifications
+    if (typeof window.App !== 'undefined' && window.App.recordCompetitionStats) {
+      window.App.recordCompetitionStats();
+    }
+    if (typeof window.CompetitionNotifications !== 'undefined') {
+      window.CompetitionNotifications.checkNow();
+    }
     
     if (typeof window.Gamification !== 'undefined') {
       this.lastRewards = window.Gamification.processWorkout(workout, 0);
@@ -1285,16 +1299,33 @@ export const WorkoutScreen = {
     script.onload = () => {
       const node = document.getElementById('share-card-content');
       if (!node) return;
+      // P2-9: Add enhanced stats before capture
+      const user = Storage.getUser();
+      const level = Storage.getUserLevel();
+      const streak = Storage.getStreak();
+      const enhancedDiv = document.createElement('div');
+      enhancedDiv.className = 'share-enhanced-stats';
+      enhancedDiv.style.cssText = 'display:flex;gap:8px;justify-content:center;margin:12px 0;font-size:0.65rem;color:var(--color-text-secondary)';
+      enhancedDiv.innerHTML = `<span>🔥 ${streak}d racha</span><span>•</span><span>${level.icon} Lvl ${level.name}</span><span>•</span><span>📊 ${(Storage.getWorkouts().length)} total</span>`;
+      node.appendChild(enhancedDiv);
       window.html2canvas(node, { backgroundColor: '#111827' }).then(canvas => {
+        enhancedDiv.remove();
         const link = document.createElement('a');
         link.download = 'GravityFit-Workout.png';
         link.href = canvas.toDataURL('image/png');
         link.click();
         Toast.show('¡Imagen lista para IG! 🎉', 'success');
+        // P2-9: Also offer text share
+        if (navigator.share) {
+          const vol = HomeScreen.formatVolume(this._lastFinishedWorkout?.totalVolume || 0, user.units);
+          navigator.share({ title: 'GravityFit Workout', text: `${this._lastFinishedWorkout?.name || 'Workout'} 💪\n📊 ${vol} · ⏱ ${this.formatTime(this._lastFinishedWorkout?.duration || 0)}\n🏋️ GravityFit` }).catch(() => {});
+        }
       });
     };
     document.body.appendChild(script);
   },
+
+  _lastFinishedWorkout: null,
 
   confirmCancel() {
     Modal.show(`

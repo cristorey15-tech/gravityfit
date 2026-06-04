@@ -722,6 +722,91 @@ export const SetParticles = {
   }
 };
 
+// --- P2-12: Superset Timer ---
+export const SupersetTimer = {
+  overlay: null,
+  interval: null,
+  endTime: 0,
+  total: 0,
+  circumference: 0,
+  progressCircle: null,
+  timeDisplay: null,
+  _currentExercise: null,
+  _nextExercise: null,
+  _onComplete: null,
+
+  start(seconds, currentExercise, nextExercise, onComplete) {
+    this.clearTimer();
+    this.total = seconds;
+    this.endTime = Date.now() + (seconds * 1000);
+    this._currentExercise = currentExercise;
+    this._nextExercise = nextExercise;
+    this._onComplete = onComplete;
+    this.render();
+    const overlay = document.getElementById('rest-timer-overlay');
+    if (overlay) overlay.classList.add('active');
+    const r = 54;
+    this.circumference = 2 * Math.PI * r;
+    this.interval = setInterval(() => this.update(), 200);
+  },
+
+  render() {
+    const overlay = document.getElementById('rest-timer-overlay');
+    if (!overlay) return;
+    overlay.innerHTML = `
+      <div style="text-align:center">
+        <div style="font-size:0.7rem;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Superset</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px">
+          <span style="font-weight:600;font-size:0.9rem;color:var(--color-accent)">${this._currentExercise || ''}</span>
+          <span style="font-size:1.2rem">→</span>
+          <span style="font-weight:600;font-size:0.9rem">${this._nextExercise || ''}</span>
+        </div>
+        <div class="timer-circle">
+          <svg viewBox="0 0 120 120">
+            <circle class="timer-bg" cx="60" cy="60" r="54"/>
+            <circle class="timer-progress" cx="60" cy="60" r="54"/>
+          </svg>
+          <span class="timer-time" id="ss-timer-time">${this.formatTime(this.getRemaining())}</span>
+          <span class="timer-label">restante</span>
+        </div>
+        <button class="btn btn-primary btn-lg" style="margin-top:16px;width:200px" onclick="SupersetTimer.skip()">Saltar →</button>
+      </div>
+    `;
+  },
+
+  getRemaining() {
+    if (this.endTime === 0) return 0;
+    return Math.max(0, Math.ceil((this.endTime - Date.now()) / 1000));
+  },
+
+  update() {
+    const rem = this.getRemaining();
+    const timeEl = document.getElementById('ss-timer-time');
+    if (timeEl) timeEl.textContent = this.formatTime(rem);
+    if (rem <= 0) this.finish();
+  },
+
+  skip() { this.finish(); },
+
+  finish() {
+    this.clearTimer();
+    this.endTime = 0;
+    const overlay = document.getElementById('rest-timer-overlay');
+    if (overlay) overlay.classList.remove('active');
+    if (this._onComplete) this._onComplete();
+  },
+
+  clearTimer() {
+    if (this.interval) { clearInterval(this.interval); this.interval = null; }
+  },
+
+  formatTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  }
+};
+
 export const LineChart = {
   render(data, options = {}) {
     if (!data || data.length === 0) return '';

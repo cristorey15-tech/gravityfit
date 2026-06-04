@@ -133,6 +133,24 @@ export const ProfileScreen = {
         </div>
 
         <div class="settings-group">
+          <div class="settings-group-title">Social</div>
+          <div class="settings-item" onclick="App.navigateToCompetition()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">🏆</span>
+              <span class="settings-item-label">Competencia con Amigos</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">Ver →</span>
+          </div>
+          <div class="settings-item" style="cursor:default">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">🔔</span>
+              <span class="settings-item-label">Alertas de Competencia</span>
+            </div>
+            <div class="toggle ${(Storage.getNotificationSettings().competitionAlerts !== false) ? 'active' : ''}" onclick="ProfileScreen.toggleCompetitionAlerts()"></div>
+          </div>
+        </div>
+
+        <div class="settings-group">
           <div class="settings-group-title">App</div>
           ${!window.App || !window.App.isPWAInstalled || !window.App.isPWAInstalled() ? `
           <div class="settings-item" onclick="window.App.installApp()">
@@ -232,6 +250,20 @@ export const ProfileScreen = {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2m12-6h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2m-6-8v14M8 6h8M8 18h8"/></svg>
               <span class="settings-item-label">Calculadora 1RM</span>
             </div>
+          </div>
+          <div class="settings-item" onclick="ProfileScreen.show1RMTestProtocol()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">🧪</span>
+              <span class="settings-item-label">Protocolo Test 1RM</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">Guía</span>
+          </div>
+          <div class="settings-item" onclick="ProfileScreen.showNotificationSettings()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">🔔</span>
+              <span class="settings-item-label">Recordatorios</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">Config</span>
           </div>
           <div class="settings-item" onclick="ProfileScreen.showEvolutionChart()">
             <div class="settings-item-left">
@@ -591,16 +623,22 @@ export const ProfileScreen = {
     const workouts = Storage.getWorkouts();
     const user = Storage.getUser();
     if (!workouts.length) { Toast.show('No hay entrenamientos para exportar', 'error'); return; }
-    const header = 'Fecha,Nombre,Volumen,Duration(min),Ejercicios,Intensidad,Notas';
+    const header = 'Fecha,Nombre,Volumen,Duration(min),Ejercicios,Series,Intensidad,Peso Max,Notas';
     const rows = workouts.map(w => {
       const date = w.finishedAt ? new Date(w.finishedAt).toLocaleDateString('es-ES') : '';
       const name = (w.name || '').replace(/,/g, ';');
       const vol = Storage.getTotalVolume(w);
       const dur = Math.round((w.duration || 0) / 60);
       const exCount = (w.exercises || []).length;
+      let totalSets = 0, maxW = 0;
+      (w.exercises || []).forEach(ex => {
+        (ex.sets || []).forEach(s => {
+          if (s.completed) { totalSets++; if (s.weight > maxW) maxW = s.weight; }
+        });
+      });
       const intensity = w.intensityScore || '';
       const notes = (w.notes || '').replace(/,/g, ';').replace(/\n/g, ' ');
-      return `${date},${name},${vol},${dur},${exCount},${intensity},${notes}`;
+      return `${date},${name},${vol},${dur},${exCount},${totalSets},${intensity},${maxW},${notes}`;
     });
     const csv = header + '\n' + rows.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1339,6 +1377,149 @@ export const ProfileScreen = {
   },
 
   // --- FEATURE: QR Code Share ---
+  // =============================================
+  // P2-8: 1RM Testing Protocol
+  // =============================================
+  show1RMTestProtocol() {
+    const user = Storage.getUser();
+    const exercises = Storage.getAllExercises().filter(e => e.equipmentType !== 'none');
+    const muscleGroups = [...new Set(exercises.map(e => e.primaryMuscle))].slice(0, 8);
+
+    const html = `
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:3rem;margin-bottom:8px">🧪</div>
+        <h3 style="font-size:1.1rem;font-weight:700;margin-bottom:4px">Protocolo de Test 1RM</h3>
+        <p style="font-size:0.8rem;color:var(--color-text-secondary)">Sigue estos pasos para estimar tu máximo real. Calienta bien antes.</p>
+      </div>
+      <div style="text-align:left;font-size:0.8rem;color:var(--color-text-secondary);line-height:1.7">
+        <div style="margin-bottom:12px">
+          <div style="font-weight:600;color:var(--color-accent);margin-bottom:4px">Paso 1 — Calentamiento (5 min)</div>
+          <div>5 min de cardio ligero + movilidad articular de las zonas que vas a trabajar.</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-weight:600;color:var(--color-accent);margin-bottom:4px">Paso 2 — Series de aproximación</div>
+          <ul style="margin:0;padding-left:18px">
+            <li>10 reps con tu peso ligero (~50% 1RM estimado)</li>
+            <li>6 reps con peso medio (~70%)</li>
+            <li>3 reps con peso pesado (~85%)</li>
+            <li>1 rep con peso del test (~95%)</li>
+          </ul>
+          <div style="font-size:0.7rem;color:var(--color-text-tertiary);margin-top:4px">Descansa 3-5 minutos entre series pesadas.</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-weight:600;color:var(--color-accent);margin-bottom:4px">Paso 3 — Intento Máximo</div>
+          <div>Intenta levantar el peso máximo con buena forma. Si lo logras, sube 2.5${user.units} e intenta de nuevo. Si fallas, tu 1RM es el peso anterior.</div>
+        </div>
+        <div style="margin-bottom:12px">
+          <div style="font-weight:600;color:var(--color-accent);margin-bottom:4px">Paso 4 — Registra tu resultado</div>
+          <div>Usa la Calculadora 1RM para calcular tu máximo estimado con la fórmula de Epley.</div>
+        </div>
+        <div style="background:var(--color-bg-input);padding:12px;border-radius:8px;margin-top:12px">
+          <div style="font-weight:600;color:var(--color-warning);margin-bottom:4px">⚠️ Precauciones</div>
+          <ul style="margin:0;padding-left:18px;font-size:0.75rem">
+            <li>No hagas este test más de 1 vez cada 4-6 semanas</li>
+            <li>Ten un compañero de seguridad para sentadillas y banca</li>
+            <li>No hagas test si tienes alguna lesión</li>
+          </ul>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="Modal.hide()">¡Entendido! 💪</button>
+    `;
+    Modal.show(html, { title: '🧪 Test de Fuerza 1RM' });
+  },
+
+  // =============================================
+  // P0-1: Notification Settings
+  // =============================================
+  showNotificationSettings() {
+    const settings = Storage.getNotificationSettings();
+    const html = `
+      <div style="margin-bottom:16px">
+        <div class="settings-item" style="cursor:default">
+          <div class="settings-item-left">
+            <span style="font-size:1.2rem;margin-right:4px">🔔</span>
+            <span class="settings-item-label">Activar Recordatorios</span>
+          </div>
+          <div class="toggle ${settings.enabled ? 'active' : ''}" onclick="ProfileScreen.toggleNotifEnabled()"></div>
+        </div>
+        <div class="settings-item" style="cursor:default;${settings.enabled ? '' : 'opacity:0.4;pointer-events:none'}">
+          <div class="settings-item-left">
+            <span style="font-size:1.2rem;margin-right:4px">⏰</span>
+            <span class="settings-item-label">Hora del Recordatorio</span>
+          </div>
+          <input type="time" class="input" value="${settings.time}" style="width:100px;padding:4px 8px;font-size:0.8rem" onchange="ProfileScreen.setNotifTime(this.value)">
+        </div>
+        <div class="settings-item" style="cursor:default;${settings.enabled ? '' : 'opacity:0.4;pointer-events:none'}">
+          <div class="settings-item-left">
+            <span style="font-size:1.2rem;margin-right:4px">😴</span>
+            <span class="settings-item-label">Tips de Día de Descanso</span>
+          </div>
+          <div class="toggle ${settings.restDayTips ? 'active' : ''}" onclick="ProfileScreen.toggleRestDayTips()"></div>
+        </div>
+        <div class="settings-item" style="cursor:default;${settings.enabled ? '' : 'opacity:0.4;pointer-events:none'}">
+          <div class="settings-item-left">
+            <span style="font-size:1.2rem;margin-right:4px">⚠️</span>
+            <span class="settings-item-label">Alerta de Entrenos Perdidos</span>
+          </div>
+          <div class="toggle ${settings.missedReminder ? 'active' : ''}" onclick="ProfileScreen.toggleMissedReminder()"></div>
+        </div>
+      </div>
+      <div style="font-size:0.7rem;color:var(--color-text-tertiary);text-align:center;padding:0 16px">
+        Los recordatorios requieren permiso de notificaciones del navegador.
+      </div>
+    `;
+    Modal.show(html, { title: '🔔 Recordatorios' });
+  },
+
+  toggleNotifEnabled() {
+    const settings = Storage.getNotificationSettings();
+    if (!settings.enabled) {
+      window.App.requestNotificationPermission();
+    } else {
+      settings.enabled = false;
+      Storage.saveNotificationSettings(settings);
+      Toast.show('Recordatorios desactivados', 'info');
+    }
+    this.showNotificationSettings();
+  },
+
+  setNotifTime(time) {
+    const settings = Storage.getNotificationSettings();
+    settings.time = time;
+    Storage.saveNotificationSettings(settings);
+    Toast.show(`Recordatorio configurado a las ${time}`);
+  },
+
+  toggleRestDayTips() {
+    const settings = Storage.getNotificationSettings();
+    settings.restDayTips = !settings.restDayTips;
+    Storage.saveNotificationSettings(settings);
+    this.showNotificationSettings();
+  },
+
+  toggleMissedReminder() {
+    const settings = Storage.getNotificationSettings();
+    settings.missedReminder = !settings.missedReminder;
+    Storage.saveNotificationSettings(settings);
+    this.showNotificationSettings();
+  },
+
+  toggleCompetitionAlerts() {
+    const settings = Storage.getNotificationSettings();
+    settings.competitionAlerts = settings.competitionAlerts === false ? true : false;
+    Storage.saveNotificationSettings(settings);
+    // Restart competition notification listeners
+    if (typeof window.CompetitionNotifications !== 'undefined') {
+      if (settings.competitionAlerts) {
+        window.CompetitionNotifications.restart();
+      } else {
+        window.CompetitionNotifications.stop();
+      }
+    }
+    Toast.show(settings.competitionAlerts ? '🔔 Alertas de competencia activadas' : 'Alertas de competencia desactivadas', 'info');
+    this.render();
+  },
+
   showQRShare() {
     const url = 'https://cristorey15-tech.github.io/gravityfit/';
     const encodedUrl = encodeURIComponent(url);

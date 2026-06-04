@@ -131,6 +131,12 @@ export const AICoach = {
     let targetMuscles = [];
     let routineName = "Entrenamiento AI Dinámico";
     
+    // P1-5: Check if deload week is needed
+    if (this.shouldDeload()) {
+      routineName = '🧠 AI Coach: Semana de Deload';
+      return this.generateDeloadWorkout();
+    }
+
     // a. Verificar si hay un programa activo que dicte qué toca hoy
     const program = Storage.getActiveProgram();
     const nextWorkout = program ? Storage.getNextProgramWorkout(program) : null;
@@ -209,6 +215,98 @@ export const AICoach = {
   _roundToPlates(weight) {
     // Redondear al múltiplo de 2.5 más cercano (ej. 12.5, 15, 17.5) asumiendo discos estándar
     return Math.round(weight / 2.5) * 2.5;
+  },
+
+  // =============================================
+  // P1-5: Auto Deload Week Detection
+  // =============================================
+  shouldDeload() {
+    const user = Storage.getUser();
+    if (!user.deloadConfig) user.deloadConfig = { lastDeloadWeek: 0, weeksSinceDeload: 0 };
+    const workouts = Storage.getWorkouts();
+    if (workouts.length < 10) return false; // Need enough data
+    // Count weeks since last deload
+    const weeksSinceDeload = user.deloadConfig.weeksSinceDeload || 0;
+    // Deload every 3-4 weeks if volume has been consistently high
+    if (weeksSinceDeload < 3) return false;
+    // Check if average volume last 2 weeks > threshold
+    const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    const recentWorkouts = workouts.filter(w => new Date(w.finishedAt) >= twoWeeksAgo);
+    if (recentWorkouts.length < 4) return false;
+    const avgVol = recentWorkouts.reduce((s, w) => s + Storage.getTotalVolume(w), 0) / recentWorkouts.length;
+    // Compare to overall average
+    const allAvg = workouts.reduce((s, w) => s + Storage.getTotalVolume(w), 0) / workouts.length;
+    return avgVol > allAvg * 0.9; // Volume has been at least 90% of overall average
+  },
+
+  generateDeloadWorkout() {
+    const user = Storage.getUser();
+    const fatigue = this.getMuscleFatigue();
+    // Pick the most fatigued muscle for light work
+    const sorted = Object.entries(fatigue).sort((a, b) => b[1] - a[1]);
+    const targetMuscle = sorted.length > 0 ? sorted[0][0] : 'Pecho';
+    const allExercises = Storage.getAllExercises();
+    const muscleExercises = allExercises.filter(e => e.primaryMuscle === targetMuscle);
+    const selected = muscleExercises.slice(0, 2);
+    const exercises = selected.map(ex => {
+      const e1RM = this.estimate1RM(ex.id);
+      const baseWeight = e1RM > 0 ? this._roundToPlates(e1RM * 0.5) : null;
+      return {
+        exerciseId: ex.id,
+        unit: user.units,
+        timeMode: false,
+        sets: [
+          { weight: baseWeight, reps: 12, type: 'normal', completed: false },
+          { weight: baseWeight, reps: 12, type: 'normal', completed: false },
+          { weight: baseWeight, reps: 15, type: 'normal', completed: false },
+        ]
+      };
+    });
+    // Reset deload counter
+    user.deloadConfig = user.deloadConfig || {};
+    user.deloadConfig.lastDeloadWeek = user.deloadConfig.weeksSinceDeload || 0;
+    user.deloadConfig.weeksSinceDeload = 0;
+    Storage.saveUser(user);
+    return { name: `🧠 Deload: ${targetMuscle} Ligero`, exercises };
+  },
+
+  incrementWeeksSinceDeload() {
+    const user = Storage.getUser();
+    if (!user.deloadConfig) user.deloadConfig = {};
+    user.deloadConfig.weeksSinceDeload = (user.deloadConfig.weeksSinceDeload || 0) + 1;
+    Storage.saveUser(user);
+  },
+
+  // =============================================
+  // P3-14: Pattern Learning + RPE Auto-Adjust
+  // =============================================
+  getExercisePerformanceTrend(exerciseId) {
+    const history = Storage.getExerciseHistory(exerciseId, 6);
+    if (history.length < 2) return null;
+    const volumes = history.map(h => h.totalVol);
+    const weights = history.map(h => h.maxWeight);
+    const recentVol = volumes.slice(0, 2).reduce((a, b) => a + b, 0) / 2;
+    const olderVol = volumes.slice(2).reduce((a, b) => a + b, 0) / Math.max(1, volumes.slice(2).length);
+    const trend = recentVol > olderVol * 1.05 ? 'improving' : recentVol < olderVol * 0.95 ? 'declining' : 'stable';
+    return { trend, recentVol, olderVol, recentWeight: weights[0] || 0 };
+  },
+
+  getSuggestedWeightFromRPE(exerciseId, targetRPE) {
+    const history = Storage.getExerciseHistory(exerciseId, 10);
+    if (history.length === 0) return null;
+    // Find sessions where RPE was recorded
+    const withRPE = [];
+    for (const h of history) {
+      for (const s of h.sets) {
+        if (s.rpe && s.weight) {
+          withRPE.push({ weight: s.weight, reps: s.reps, rpe: s.rpe });
+        }
+      }
+    }
+    if (withRPE.length === 0) return null;
+    // Find closest RPE match and suggest that weight
+    withRPE.sort((a, b) => Math.abs(a.rpe - targetRPE) - Math.abs(b.rpe - targetRPE));
+    return withRPE[0].weight;
   },
 
   // Inyectar Rutina en la UI

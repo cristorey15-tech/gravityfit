@@ -895,6 +895,13 @@ export const RoutinesScreen = {
       programData.restDaysBetween = parseInt(document.getElementById('prog-rest')?.value) || 0;
       programData.completedWorkouts = [];
     }
+    // P2-11: Periodization — auto-generate mesocycles for all program types
+    const totalWeeks = parseInt(document.getElementById('prog-weeks')?.value) || 4;
+    programData.mesocycles = [
+      { name: 'Adaptación', weeks: Math.max(1, Math.ceil(totalWeeks * 0.25)), intensity: 'moderate', volume: 'high' },
+      { name: 'Carga', weeks: Math.max(1, Math.ceil(totalWeeks * 0.5)), intensity: 'high', volume: 'high' },
+      { name: 'Deload', weeks: Math.max(1, Math.ceil(totalWeeks * 0.25)), intensity: 'low', volume: 'low' },
+    ];
 
     Storage.addProgram(programData);
     Toast.show('¡Programa creado! 📅', 'success');
