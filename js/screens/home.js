@@ -5,6 +5,7 @@
 import { Storage } from '../storage.js';
 import { Icons, Toast, Modal, escapeHtml } from '../components.js';
 import { Calories } from '../calories.js';
+import { renderBodyMap, fatigueColor } from '../body-map.js';
 import { App } from '../app.js';
 
 export const HomeScreen = {
@@ -495,245 +496,12 @@ export const HomeScreen = {
     const fatigue = window.AICoach.getMuscleFatigue();
     if (!Object.keys(fatigue).length) return '';
 
-    const getFatigueColor = (pct) => {
-      if (!pct || pct === 0) return 'rgba(255,255,255,0.05)';
-      let r, g, b;
-      if (pct <= 33) {
-        r = Math.round(34 + (pct / 33) * 187);
-        g = Math.round(197 - (pct / 33) * 17);
-        b = Math.round(94 - (pct / 33) * 60);
-      } else if (pct <= 66) {
-        const t = (pct - 33) / 33;
-        r = Math.round(221 + t * 34);
-        g = Math.round(180 - t * 92);
-        b = Math.round(34 - t * 34);
-      } else {
-        const t = (pct - 66) / 34;
-        r = 255;
-        g = Math.round(88 - t * 68);
-        b = Math.round(t * 10);
-      }
-      return `rgba(${r},${g},${b},${0.3 + (pct / 100) * 0.6})`;
-    };
-
-    const mf = (name) => {
-      const pct = fatigue[name] || 0;
-      return pct > 0 ? getFatigueColor(pct) : 'rgba(255,255,255,0.04)';
-    };
-
-    // Interactive muscle region
-    const me = (d, name, extra) => {
-      const pct = fatigue[name] || 0;
-      const glow = pct > 60 ? ' filter="url(#glow-f)"' : '';
-      return '<path d="' + d + '" fill="' + mf(name) + '" stroke="rgba(255,255,255,' + (pct > 0 ? 0.25 : 0.1) + ')" stroke-width="0.5" stroke-linejoin="round" style="cursor:pointer;transition:all 0.3s" onmouseover="this.style.opacity=0.8;this.style.strokeWidth=1" onmouseout="this.style.opacity=1;this.style.strokeWidth=0.5" onclick="HomeScreen.showMuscleDetail(\'' + name + '\')" ' + (extra || '') + glow + '/>';
-    };
-
-    // Non-interactive detail line (muscle separation)
-    const nd = (d) => '<path d="' + d + '" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round"/>';
-
-    // Body outline
-    const bo = (d) => '<path d="' + d + '" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>';
-
-    // Inner body fill (light gray like reference)
-    const bf = (d) => '<path d="' + d + '" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.1)" stroke-width="0.6" stroke-linejoin="round"/>';
-
-    // --- FRONT VIEW ---
-    const svgDefs = '<defs>'
-      + '<filter id="glow-f"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
-      + '</defs>';
-
-    // Complete body silhouette (front)
-    const bodyFront = 'M70,6 C76,6 82,10 84,18 C86,26 84,36 80,40 L84,44 C94,46 102,52 106,62 L110,82 C112,92 110,100 106,106 L96,118 L92,136 L86,144 L80,148 L84,168 C86,190 88,210 86,228 L84,248 C84,254 80,258 76,258 L72,258 L68,258 L64,258 C60,258 56,254 56,248 L54,228 C52,210 54,190 56,168 L60,148 L54,144 L48,136 L44,118 L34,106 C30,100 28,92 30,82 L34,62 C38,52 46,46 56,44 L60,40 C56,36 54,26 56,18 C58,10 64,6 70,6 Z';
-
-    // Head (front)
-    const headFront = 'M70,6 C77,6 83,12 83,22 C83,32 77,40 70,40 C63,40 57,32 57,22 C57,12 63,6 70,6 Z';
-
-    // --- FRONT MUSCLES ---
-    // Trapezius (neck/upper shoulders)
-    const trapsFront = me('M58,36 L70,34 L82,36 L86,42 L84,48 L70,46 L56,48 L54,42 Z', 'trapecios');
-
-    // Shoulders (deltoids) - rounded caps
-    const shouldersFrontL = me('M44,44 C38,42 32,46 28,54 C26,60 28,66 32,70 L40,68 L48,60 L52,50 L48,44 Z', 'hombros');
-    const shouldersFrontR = me('M96,44 C102,42 108,46 112,54 C114,60 112,66 108,70 L100,68 L92,60 L88,50 L92,44 Z', 'hombros');
-
-    // Pectorals - with defined shape
-    const pecsL = me('M54,48 C54,46 58,44 66,44 L70,44 L70,50 L70,72 C70,76 66,78 60,76 L54,72 L52,60 Z', 'pectorals');
-    const pecsR = me('M86,48 C86,46 82,44 74,44 L70,44 L70,50 L70,72 C70,76 74,78 80,76 L86,72 L88,60 Z', 'pectorals');
-
-    // Pec detail lines
-    const pecDetail = nd('M70,48 L70,74') + nd('M56,52 C60,56 66,58 70,58') + nd('M84,52 C80,56 74,58 70,58');
-
-    // Serratus anterior - side ribcage
-    const serrL = me('M42,64 C40,68 38,74 40,80 L44,78 L46,70 L44,64 Z', 'serratus-anterior');
-    const serrR = me('M98,64 C100,68 102,74 100,80 L96,78 L94,70 L96,64 Z', 'serratus-anterior');
-
-    // Biceps
-    const bicepsL = me('M32,68 C28,72 26,78 26,86 C26,92 28,98 32,100 L38,98 L42,90 L42,78 L40,70 Z', 'biceps');
-    const bicepsR = me('M108,68 C112,72 114,78 114,86 C114,92 112,98 108,100 L102,98 L98,90 L98,78 L100,70 Z', 'biceps');
-
-    // Core / Abs - 6-pack style
-    const core = me('M58,74 L82,74 L82,80 L70,82 L58,80 Z'
-      + ' M60,84 L70,82 L80,84 L80,100 L70,102 L60,100 Z'
-      + ' M60,104 L70,102 L80,104 L80,120 L70,122 L60,120 Z'
-      + ' M58,124 L70,122 L82,124 L80,138 L60,138 Z', 'core');
-
-    // Core detail lines (ab separations)
-    const coreDetail = nd('M70,82 L70,138') + nd('M60,88 L60,118') + nd('M80,88 L80,118') + nd('M60,96 L80,96') + nd('M60,112 L80,112');
-
-    // Obliques
-    const obliquesL = nd('M56,100 L52,120 L54,136') + nd('M84,100 L88,120 L86,136');
-
-    // Forearms
-    const forearmL = me('M22,102 C18,106 16,114 16,122 C16,128 18,134 22,136 L28,134 L32,126 L32,112 L30,104 Z', 'antebrazos');
-    const forearmR = me('M118,102 C122,106 124,114 124,122 C124,128 122,134 118,136 L112,134 L108,126 L108,112 L110,104 Z', 'antebrazos');
-
-    // Hands (non-interactive)
-    const handL = '<path d="M16,136 C12,140 10,144 12,146 L20,144 L24,136 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>';
-    const handR = '<path d="M124,136 C128,140 130,144 128,146 L120,144 L116,136 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>';
-
-    // Abductors (outer hip)
-    const abdL = me('M54,138 L62,136 L64,148 L62,152 L54,152 L52,148 Z', 'abductores');
-    const abdR = me('M86,138 L78,136 L76,148 L78,152 L86,152 L88,148 Z', 'abductores');
-
-    // Adductors (inner thigh)
-    const addL = me('M62,152 L68,152 L66,198 L62,198 Z', 'adductors');
-    const addR = me('M78,152 L72,152 L74,198 L78,198 Z', 'adductors');
-
-    // Quadriceps - with separation lines
-    const quadL = me('M54,152 C52,158 48,172 46,190 C44,206 46,218 48,226 L56,226 C58,218 60,206 60,190 C60,172 58,158 56,152 Z', 'cuadriceps');
-    const quadR = me('M86,152 C88,158 92,172 94,190 C96,206 94,218 92,226 L84,226 C82,218 80,206 80,190 C80,172 82,158 84,152 Z', 'cuadriceps');
-
-    // Quad detail lines
-    const quadDetail = nd('M52,160 L50,200') + nd('M88,160 L90,200') + nd('M58,164 L56,210') + nd('M82,164 L84,210');
-
-    // Knees (non-interactive)
-    const kneeL = '<path d="M48,226 C46,230 46,236 48,238 L58,238 L58,230 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="0.4"/>';
-    const kneeR = '<path d="M92,226 C94,230 94,236 92,238 L82,238 L82,230 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="0.4"/>';
-
-    // Calves (front)
-    const calfL = me('M48,238 C46,242 46,248 48,252 L58,252 L58,242 Z', 'pantorrillas');
-    const calfR = me('M92,238 C94,242 94,248 92,252 L82,252 L82,242 Z', 'pantorrillas');
-
-    // Feet (non-interactive)
-    const footL = '<path d="M48,252 C46,254 44,258 48,260 L58,260 L60,252 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="0.4"/>';
-    const footR = '<path d="M92,252 C94,254 96,258 92,260 L82,260 L80,252 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="0.4"/>';
-
-    const frontView = '<svg viewBox="0 0 140 260" width="110" height="200" style="display:block">'
-      + svgDefs
-      + bf(bodyFront)
-      + bo(bodyFront)
-      + nd(headFront)
-      + trapsFront
-      + shouldersFrontL + shouldersFrontR
-      + pecsL + pecsR + pecDetail
-      + serrL + serrR
-      + bicepsL + bicepsR
-      + core + coreDetail + obliquesL
-      + forearmL + forearmR + handL + handR
-      + abdL + abdR + addL + addR
-      + quadL + quadR + quadDetail
-      + kneeL + kneeR
-      + calfL + calfR
-      + footL + footR
-      + '</svg>';
-
-    // --- BACK VIEW ---
-    const svgDefsB = '<defs>'
-      + '<filter id="glow-b"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
-      + '</defs>';
-
-    // Same body silhouette for back
-    const meB = (d, name, extra) => {
-      const pct = fatigue[name] || 0;
-      const glow = pct > 60 ? ' filter="url(#glow-b)"' : '';
-      return '<path d="' + d + '" fill="' + mf(name) + '" stroke="rgba(255,255,255,' + (pct > 0 ? 0.25 : 0.1) + ')" stroke-width="0.5" stroke-linejoin="round" style="cursor:pointer;transition:all 0.3s" onmouseover="this.style.opacity=0.8;this.style.strokeWidth=1" onmouseout="this.style.opacity=1;this.style.strokeWidth=0.5" onclick="HomeScreen.showMuscleDetail(\'' + name + '\')" ' + (extra || '') + glow + '/>';
-    };
-
-    const ndB = (d) => '<path d="' + d + '" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.4" stroke-linecap="round"/>';
-
-    // Traps (back) - diamond/trapezoid shape
-    const trapsBk = meB('M58,34 L70,32 L82,34 L86,44 L84,54 L70,56 L56,54 L54,44 Z', 'trapecios');
-
-    // Levator scapulae - upper neck
-    const levL = meB('M56,28 C54,30 52,34 52,38 L56,36 L58,30 Z', 'levator-scapulae');
-    const levR = meB('M84,28 C86,30 88,34 88,38 L84,36 L82,30 Z', 'levator-scapulae');
-
-    // Shoulders (back delts)
-    const shdBkL = meB('M44,46 C38,44 32,48 28,56 C26,62 28,68 32,72 L40,70 L48,62 L52,52 L48,46 Z', 'hombros');
-    const shdBkR = meB('M96,46 C102,44 108,48 112,56 C114,62 112,68 108,72 L100,70 L92,62 L88,52 L92,46 Z', 'hombros');
-
-    // Upper back (lats/rhomboids) - large area
-    const espalda = meB('M52,56 C50,58 48,64 48,72 L48,90 C48,94 56,98 64,98 L70,100 L76,98 C84,94 92,90 92,72 L92,64 C90,58 88,56 86,56 L70,58 Z', 'espalda');
-
-    // Back detail lines (spine, scapula outlines)
-    const backDetail = ndB('M70,56 L70,136')
-      + ndB('M56,62 C58,70 62,78 66,82')
-      + ndB('M84,62 C82,70 78,78 74,82')
-      + ndB('M56,80 C60,86 66,90 70,92')
-      + ndB('M84,80 C80,86 74,90 70,92');
-
-    // Triceps
-    const triL = meB('M32,70 C28,74 26,80 26,88 C26,94 28,100 32,102 L38,100 L42,92 L42,80 L40,72 Z', 'triceps');
-    const triR = meB('M108,70 C112,74 114,80 114,88 C114,94 112,100 108,102 L102,100 L98,92 L98,80 L100,72 Z', 'triceps');
-
-    // Spine erectors (detail)
-    const spineDetail = ndB('M64,96 L64,132') + ndB('M76,96 L76,132');
-
-    // Glutes
-    const gluteL = meB('M52,100 C50,104 48,110 48,116 C48,122 50,126 54,128 L68,126 L70,102 Z', 'gluteos');
-    const gluteR = meB('M88,100 C90,104 92,110 92,116 C92,122 90,126 86,128 L72,126 L70,102 Z', 'gluteos');
-
-    // Glute detail
-    const gluteDetail = ndB('M70,102 L70,126') + ndB('M56,110 C60,114 66,116 70,116') + ndB('M84,110 C80,114 74,116 70,116');
-
-    // Forearms (back)
-    const forearmBkL = meB('M22,104 C18,108 16,116 16,124 C16,130 18,136 22,138 L28,136 L32,128 L32,114 L30,106 Z', 'antebrazos');
-    const forearmBkR = meB('M118,104 C122,108 124,116 124,124 C124,130 122,136 118,138 L112,136 L108,128 L108,114 L110,106 Z', 'antebrazos');
-
-    // Hands (back)
-    const handBkL = '<path d="M16,138 C12,142 10,146 12,148 L20,146 L24,138 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>';
-    const handBkR = '<path d="M124,138 C128,142 130,146 128,148 L120,146 L116,138 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>';
-
-    // Hamstrings (femorales)
-    const femL = meB('M52,128 C50,136 48,152 46,170 C44,188 46,206 48,222 L56,222 C58,210 60,196 60,180 C60,160 58,144 56,132 Z', 'femorales');
-    const femR = meB('M88,128 C90,136 92,152 94,170 C96,188 94,206 92,222 L84,222 C82,210 80,196 80,180 C80,160 82,144 84,132 Z', 'femorales');
-
-    // Hamstring detail
-    const femDetail = ndB('M54,140 L52,190') + ndB('M86,140 L88,190');
-
-    // Calves (back - gastrocnemius)
-    const calfBkL = meB('M48,226 C44,232 42,238 44,244 C46,248 50,250 54,248 C58,244 58,238 56,228 Z', 'pantorrillas');
-    const calfBkR = meB('M92,226 C96,232 98,238 96,244 C94,248 90,250 86,248 C82,244 82,238 84,228 Z', 'pantorrillas');
-
-    // Calf detail
-    const calfDetail = ndB('M50,234 L50,246') + ndB('M90,234 L90,246');
-
-    // Feet (back)
-    const footBkL = '<path d="M48,250 C46,252 44,256 46,260 L56,260 L58,250 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="0.4"/>';
-    const footBkR = '<path d="M92,250 C94,252 96,256 94,260 L84,260 L82,250 Z" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.08)" stroke-width="0.4"/>';
-
-    const backView = '<svg viewBox="0 0 140 260" width="110" height="200" style="display:block">'
-      + svgDefsB
-      + bf(bodyFront)
-      + bo(bodyFront)
-      + ndB(headFront)
-      + trapsBk
-      + levL + levR
-      + shdBkL + shdBkR
-      + espalda + backDetail
-      + triL + triR
-      + spineDetail
-      + gluteL + gluteR + gluteDetail
-      + forearmBkL + forearmBkR + handBkL + handBkR
-      + femL + femR + femDetail
-      + calfBkL + calfBkR + calfDetail
-      + footBkL + footBkR
-      + '</svg>';
+    const map = renderBodyMap(fatigue, { onMuscleClick: 'HomeScreen.showMuscleDetail' });
 
     const highFatigue = Object.entries(fatigue).filter(([,v]) => v > 50).sort((a,b) => b[1]-a[1]);
     const pills = highFatigue.length
       ? '<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:6px">'
-          + highFatigue.map(([n, p]) => '<span style="font-size:0.65rem;padding:3px 10px;border-radius:10px;background:' + getFatigueColor(p) + ';color:var(--color-text);cursor:pointer;font-weight:500" onclick="HomeScreen.showMuscleDetail(\'' + n + '\')">' + HomeScreen.muscleLabel(n) + ' ' + p + '%</span>').join('')
+          + highFatigue.map(([n, p]) => '<span style="font-size:0.65rem;padding:3px 10px;border-radius:10px;background:' + fatigueColor(p) + ';color:var(--color-text);cursor:pointer;font-weight:500" onclick="HomeScreen.showMuscleDetail(\'' + n + '\')">' + HomeScreen.muscleLabel(n) + ' ' + p + '%</span>').join('')
           + '</div>'
       : '';
 
@@ -744,11 +512,11 @@ export const HomeScreen = {
       + '        </div>\n'
       + '        <div style="display:flex;gap:16px;justify-content:center;align-items:flex-start">\n'
       + '          <div style="text-align:center">\n'
-      + '            ' + frontView + '\n'
+      + '            ' + map.front + '\n'
       + '            <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:4px;font-weight:500">Frontal</div>\n'
       + '          </div>\n'
       + '          <div style="text-align:center">\n'
-      + '            ' + backView + '\n'
+      + '            ' + map.back + '\n'
       + '            <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:4px;font-weight:500">Posterior</div>\n'
       + '          </div>\n'
       + '        </div>\n'

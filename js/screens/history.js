@@ -6,6 +6,7 @@ import { Storage } from '../storage.js';
 import { Icons, Modal, Toast, escapeHtml } from '../components.js';
 import { HomeScreen } from './home.js';
 import { Calories } from '../calories.js';
+import { Progress } from '../progress.js';
 import { App } from '../app.js';
 
 export const HistoryScreen = {
@@ -291,6 +292,13 @@ export const HistoryScreen = {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6);
 
+    // Top strength exercises for e1RM progression curves
+    const topStrength = Progress.getTopStrengthExercises(workouts, (id) => Storage.getExercise(id), 3)
+      .filter(ex => ex.sessions >= 2);
+
+    // Weekly volume per muscle group (multi-series)
+    const muscleVol = Progress.getMuscleVolumeByWeek(workouts, (id) => Storage.getExercise(id), 8);
+
     let html = `
       <div class="progress-chart-container">
         <h4>Volumen por Sesión (${user.units})</h4>
@@ -300,6 +308,39 @@ export const HistoryScreen = {
         <h4>Frecuencia Semanal</h4>
         <canvas id="chart-frequency" width="400" height="160"></canvas>
       </div>`;
+
+    // e1RM progression (fuerza real, tiene en cuenta reps vía Epley)
+    if (topStrength.length > 0) {
+      html += `<h3 style="font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);margin:16px 0 12px">📈 Progresión de Fuerza (e1RM)</h3>`;
+      topStrength.forEach(ex => {
+        html += `
+          <div class="progress-chart-container">
+            <h4>${escapeHtml(ex.name)} — e1RM (${user.units})</h4>
+            <canvas id="chart-e1rm-${ex.exerciseId}" width="400" height="180"></canvas>
+            <div style="display:flex;gap:12px;margin-top:8px;font-size:0.75rem;color:var(--color-text-secondary);justify-content:center">
+              <span>🏆 ${ex.latestE1RM} ${user.units}</span>
+              <span style="color:${ex.deltaPct > 0 ? 'var(--color-accent)' : ex.deltaPct < 0 ? 'var(--color-danger)' : 'inherit'}">${ex.deltaPct > 0 ? '📈 +' : ex.deltaPct < 0 ? '📉 ' : '➡️ '}${ex.deltaPct.toFixed(1)}%</span>
+              <span>📊 ${ex.sessions} sesiones</span>
+            </div>
+          </div>`;
+      });
+    }
+
+    // Volumen por músculo en el tiempo (multi-serie)
+    if (muscleVol.series.length > 0) {
+      html += `
+        <div class="progress-chart-container">
+          <h4>Volumen por Músculo / Semana (${user.units})</h4>
+          <canvas id="chart-muscle-volume" width="400" height="200"></canvas>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;justify-content:center">
+            ${muscleVol.series.slice(0, 6).map((s, i) => `
+              <span style="display:inline-flex;align-items:center;gap:5px;font-size:0.7rem;color:var(--color-text-secondary)">
+                <span style="width:10px;height:10px;border-radius:2px;background:${this._MUSCLE_COLORS[i % this._MUSCLE_COLORS.length]};display:inline-block"></span>
+                ${escapeHtml(this._muscleLabel(s.muscle))} (${Math.round(s.total / 1000)}k)
+              </span>`).join('')}
+          </div>
+        </div>`;
+    }
 
     chartExercises.forEach(([exId]) => {
       const exData = Storage.getExercise(exId);
@@ -314,6 +355,8 @@ export const HistoryScreen = {
     setTimeout(() => {
       this.drawVolumeChart(workouts, user);
       this.drawFrequencyChart(workouts);
+      topStrength.forEach(ex => this.drawE1RMChart(ex, user));
+      if (muscleVol.series.length > 0) this.drawMuscleVolumeChart(muscleVol);
       chartExercises.forEach(([exId]) => this.drawExerciseChart(exId, workouts));
     }, 50);
 
@@ -384,6 +427,79 @@ export const HistoryScreen = {
     });
     if (data.length < 2) return;
     this.drawLineChart(ctx, canvas.width, canvas.height, data.slice(-20), data.map((_, i) => i + 1));
+  },
+
+  // Palette for muscle-group multi-series chart
+  _MUSCLE_COLORS: ['#A3FF12', '#4FC3F7', '#FFB74D', '#BA68C8', '#EF5350', '#66BB6A', '#FFD54F', '#4DD0E1'],
+
+  _muscleLabel(muscle) {
+    return HomeScreen.muscleLabel ? HomeScreen.muscleLabel(muscle) : muscle;
+  },
+
+  drawE1RMChart(ex, user) {
+    const canvas = document.getElementById('chart-e1rm-' + ex.exerciseId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width - 32;
+    canvas.height = 180;
+    const hist = ex.history.slice(-20);
+    this.drawLineChart(ctx, canvas.width, canvas.height, hist.map(h => h.e1rm), hist.map(h => h.label));
+  },
+
+  drawMuscleVolumeChart(muscleVol) {
+    const canvas = document.getElementById('chart-muscle-volume');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width - 32;
+    canvas.height = 200;
+
+    const padding = { top: 15, right: 16, bottom: 30, left: 45 };
+    const chartW = canvas.width - padding.left - padding.right;
+    const chartH = canvas.height - padding.top - padding.bottom;
+    const { labels, series } = muscleVol;
+    const nPoints = labels.length;
+    const allVals = series.flatMap(s => s.values);
+    const maxVal = Math.max(...allVals, 1) * 1.1;
+    const xFor = (i) => padding.left + (chartW / Math.max(nPoints - 1, 1)) * i;
+    const yFor = (v) => padding.top + chartH - (v / maxVal) * chartH;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Grid lines + y labels
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#666';
+    ctx.font = '11px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const y = padding.top + (chartH / 4) * i;
+      ctx.beginPath(); ctx.moveTo(padding.left, y); ctx.lineTo(canvas.width - padding.right, y); ctx.stroke();
+      ctx.fillText(Math.round(maxVal - (maxVal / 4) * i).toLocaleString(), padding.left - 8, y + 4);
+    }
+
+    // X labels (weeks)
+    ctx.textAlign = 'center';
+    labels.forEach((lab, i) => ctx.fillText(lab, xFor(i), canvas.height - 8));
+
+    // One line per muscle (top 6)
+    series.slice(0, 6).forEach((s, si) => {
+      const color = this._MUSCLE_COLORS[si % this._MUSCLE_COLORS.length];
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      s.values.forEach((v, i) => i === 0 ? ctx.moveTo(xFor(i), yFor(v)) : ctx.lineTo(xFor(i), yFor(v)));
+      ctx.stroke();
+      // Dots
+      s.values.forEach((v, i) => {
+        ctx.beginPath();
+        ctx.arc(xFor(i), yFor(v), 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      });
+    });
   },
 
   drawLineChart(ctx, w, h, data, labels) {
@@ -768,67 +884,8 @@ export const HistoryScreen = {
   },
 
   // --- FEATURE N: Enhanced progression charts ---
-  renderEnhancedCharts() {
-    const workouts = Storage.getWorkouts();
-    if (workouts.length < 2) return '';
-    
-    // Collect per-exercise data
-    const exData = {};
-    workouts.slice().reverse().forEach(w => {
-      (w.exercises || []).forEach(ex => {
-        if (!exData[ex.exerciseId]) exData[ex.exerciseId] = [];
-        const completed = (ex.sets || []).filter(s => s.completed);
-        if (completed.length > 0) {
-          const maxW = Math.max(...completed.map(s => s.weight || 0));
-          const totalVol = completed.reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0);
-          exData[ex.exerciseId].push({ date: w.finishedAt, maxW, totalVol, sets: completed.length });
-        }
-      });
-    });
-    
-    // Get top 3 most trained exercises
-    const sorted = Object.entries(exData)
-      .map(([id, data]) => ({ id, count: data.length, data }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
-    
-    if (sorted.length === 0) return '';
-    
-    let html = '<h3 style="font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);margin:16px 0 12px">📈 Progresión Detallada</h3>';
-    
-    sorted.forEach(({ id, data }) => {
-      const ex = Storage.getExercise(id);
-      const name = escapeHtml(ex ? ex.name : id);
-      const values = data.map(d => ({ value: d.maxW, label: new Date(d.date).toLocaleDateString('es-ES', { day:'numeric', month:'short' }) }));
-      
-      html += `
-        <div class="progress-chart-container">
-          <h4>${name} — Peso Máximo</h4>
-          <canvas id="chart-${id}" width="400" height="180"></canvas>
-          <div style="display:flex;gap:12px;margin-top:8px;font-size:0.75rem;color:var(--color-text-secondary);justify-content:center">
-            <span>📊 ${data.length} sesiones</span>
-            <span>🏆 ${Math.max(...data.map(d => d.maxW))} ${Storage.getUser().units}</span>
-            <span>📈 ${data[data.length-1].maxW > data[0].maxW ? '↑' : data[data.length-1].maxW < data[0].maxW ? '↓' : '→'}</span>
-          </div>
-        </div>`;
-    });
-    
-    // Build volume progression chart (overall)
-    const volData = workouts.slice().reverse().map((w, i) => ({
-      value: Storage.getTotalVolume(w),
-      label: `${i + 1}`
-    }));
-    
-    if (volData.length >= 2) {
-      html += `
-        <div class="progress-chart-container">
-          <h4>📊 Volumen Total por Sesión</h4>
-          <canvas id="chart-volume-prog" width="400" height="180"></canvas>
-        </div>`;
-    }
-    
-    return html;
-  },
+  // NOTE: renderEnhancedCharts() was dead code (never called) and duplicated
+  // the Progress tab. Removed in favor of Progress module + e1RM/muscle charts.
 
   formatDate(dateStr) {
     if (!dateStr) return '';
