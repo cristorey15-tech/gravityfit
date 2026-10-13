@@ -3,7 +3,7 @@
 // ============================================
 
 import { describe, it, expect } from 'vitest';
-import { fatigueColor, renderBodyMap } from '../js/body-map.js';
+import { fatigueColor, renderBodyMap, normalizeFatigue } from '../js/body-map.js';
 
 describe('fatigueColor', () => {
   it('returns faint outline for 0/undefined fatigue', () => {
@@ -80,5 +80,29 @@ describe('renderBodyMap', () => {
     const map = renderBodyMap({});
     expect(map.front).toMatch(/<svg/);
     expect(map.back).toMatch(/<svg/);
+  });
+});
+
+describe('normalizeFatigue', () => {
+  it('keeps region-keyed muscles unchanged', () => {
+    expect(normalizeFatigue({ pectorals: 50, core: 20 })).toEqual({ pectorals: 50, core: 20 });
+  });
+
+  it("folds 'espalda alta' into the 'espalda' region", () => {
+    expect(normalizeFatigue({ 'espalda alta': 70 })).toEqual({ espalda: 70 });
+  });
+
+  it("folds 'spine' into the 'espalda' region", () => {
+    expect(normalizeFatigue({ spine: 40 })).toEqual({ espalda: 40 });
+  });
+
+  it('takes the max when an alias collides with a real region', () => {
+    // 'espalda alta' folds into 'espalda'; keep the more fatigued value
+    expect(normalizeFatigue({ espalda: 30, 'espalda alta': 80 })).toEqual({ espalda: 80 });
+  });
+
+  it('returns an empty object for empty/undefined input', () => {
+    expect(normalizeFatigue({})).toEqual({});
+    expect(normalizeFatigue(undefined)).toEqual({});
   });
 });

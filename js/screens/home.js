@@ -5,7 +5,7 @@
 import { Storage } from '../storage.js';
 import { Icons, Toast, Modal, escapeHtml } from '../components.js';
 import { Calories } from '../calories.js';
-import { renderBodyMap, fatigueColor } from '../body-map.js';
+import { renderBodyMap, fatigueColor, normalizeFatigue } from '../body-map.js';
 import { App } from '../app.js';
 
 export const HomeScreen = {
@@ -493,16 +493,28 @@ export const HomeScreen = {
 
   renderFatigueWidget() {
     if (typeof window.AICoach === 'undefined') return '';
-    const fatigue = window.AICoach.getMuscleFatigue();
-    if (!Object.keys(fatigue).length) return '';
+    const fatigue = normalizeFatigue(window.AICoach.getMuscleFatigue());
+    const hasData = Object.keys(fatigue).length > 0;
 
     const map = renderBodyMap(fatigue, { onMuscleClick: 'HomeScreen.showMuscleDetail' });
 
     const highFatigue = Object.entries(fatigue).filter(([,v]) => v > 50).sort((a,b) => b[1]-a[1]);
-    const pills = highFatigue.length
+    const pills = (hasData && highFatigue.length)
       ? '<div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-top:6px">'
           + highFatigue.map(([n, p]) => '<span style="font-size:0.65rem;padding:3px 10px;border-radius:10px;background:' + fatigueColor(p) + ';color:var(--color-text);cursor:pointer;font-weight:500" onclick="HomeScreen.showMuscleDetail(\'' + n + '\')">' + HomeScreen.muscleLabel(n) + ' ' + p + '%</span>').join('')
           + '</div>'
+      : '';
+
+    const emptyState = hasData
+      ? ''
+      : '<div style="text-align:center;font-size:0.7rem;color:var(--color-text-tertiary);margin-top:10px;line-height:1.5">Sin fatiga registrada en las \u00FAltimas 72h.<br>Registra un entreno para colorear tus m\u00FAsculos.</div>';
+
+    const legend = hasData
+      ? '<div style="margin:10px auto 6px;max-width:220px">'
+          + '<div style="height:6px;border-radius:3px;background:linear-gradient(to right, rgba(34,197,94,0.6), rgba(250,204,21,0.6), rgba(239,68,68,0.7));"></div>'
+          + '<div style="display:flex;justify-content:space-between;font-size:0.55rem;color:var(--color-text-tertiary);margin-top:2px">'
+          + '<span>\u{1F7E2} Recuperado</span><span>\u{1F7E1} Moderado</span><span>\u{1F534} Alto</span>'
+          + '</div></div>'
       : '';
 
     return '\n      <div class="fatigue-widget" style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:16px;padding:16px;margin-bottom:16px">\n'
@@ -520,15 +532,9 @@ export const HomeScreen = {
       + '            <div style="font-size:0.6rem;color:var(--color-text-tertiary);margin-top:4px;font-weight:500">Posterior</div>\n'
       + '          </div>\n'
       + '        </div>\n'
-      + '        <div style="margin:10px auto 6px;max-width:220px">\n'
-      + '          <div style="height:6px;border-radius:3px;background:linear-gradient(to right, rgba(34,197,94,0.6), rgba(250,204,21,0.6), rgba(239,68,68,0.7));"></div>\n'
-      + '          <div style="display:flex;justify-content:space-between;font-size:0.55rem;color:var(--color-text-tertiary);margin-top:2px">\n'
-      + '            <span>\u{1F7E2} Recuperado</span>\n'
-      + '            <span>\u{1F7E1} Moderado</span>\n'
-      + '            <span>\u{1F534} Alto</span>\n'
-      + '          </div>\n'
-      + '        </div>\n'
+      + legend + '\n'
       + pills + '\n'
+      + emptyState + '\n'
       + '        <div style="font-size:0.55rem;color:var(--color-text-tertiary);margin-top:8px;text-align:center;opacity:0.7">Basado en volumen de los \u00FAltimos 3 d\u00EDas</div>\n'
       + '      </div>';
   },

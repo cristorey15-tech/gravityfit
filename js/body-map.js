@@ -32,6 +32,24 @@ export function fatigueColor(pct) {
   return `rgba(${r},${g},${b},${0.3 + (pct / 100) * 0.6})`;
 }
 
+// Some library muscles have no 1:1 region on the figure (e.g. 'espalda alta'
+// and 'spine' both live on the back). Fold them onto a real region so their
+// fatigue still lights up instead of being silently dropped.
+const FATIGUE_ALIASES = {
+  'espalda alta': 'espalda',   // upper back → back (lats) region
+  'spine': 'espalda',         // spinal erectors → back region
+  // 'cardio' intentionally has no body region
+};
+
+export function normalizeFatigue(fatigue) {
+  const out = {};
+  for (const [key, val] of Object.entries(fatigue || {})) {
+    const target = FATIGUE_ALIASES[key] || key;
+    out[target] = Math.max(out[target] || 0, val);
+  }
+  return out;
+}
+
 // ---- One connected human silhouette (front-facing, viewBox 140×260) ----
 // Symmetric about x=70. Traced head → neck → right shoulder → right arm →
 // right torso → right leg → crotch → left leg → left arm → left shoulder.
@@ -92,18 +110,21 @@ const mkMuscle = (fatigue, defsId, onMuscleClick) => (d, name) => {
   const pct = fatigue[name] || 0;
   const glow = pct > 60 ? ` filter="url(#glow-${defsId})"` : '';
   const click = onMuscleClick ? `${onMuscleClick}('${name}')` : `HomeScreen.showMuscleDetail('${name}')`;
-  return `<path d="${d}" fill="${fatigueColor(pct)}" stroke="rgba(255,255,255,${pct > 0 ? 0.25 : 0.12})" stroke-width="0.5" stroke-linejoin="round" style="cursor:pointer;transition:all 0.3s" onmouseover="this.style.opacity=0.8;this.style.strokeWidth=1" onmouseout="this.style.opacity=1;this.style.strokeWidth=0.5" onclick="${click}"${glow}/>`;
+  // No fatigue → faint currentColor wash (theme-aware); with fatigue → saturated color.
+  const fill = pct > 0 ? fatigueColor(pct) : 'currentColor';
+  const fillOpacity = pct > 0 ? 1 : 0.07;
+  return `<path d="${d}" fill="${fill}" fill-opacity="${fillOpacity}" stroke="currentColor" stroke-opacity="${pct > 0 ? 0.35 : 0.22}" stroke-width="0.5" stroke-linejoin="round" style="cursor:pointer;transition:all 0.3s" onmouseover="this.style.opacity=0.8;this.style.strokeWidth=1" onmouseout="this.style.opacity=1;this.style.strokeWidth=0.5" onclick="${click}"${glow}/>`;
 };
 
 // Non-interactive anatomy line (muscle separation)
-const line = (d) => `<path d="${d}" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.45" stroke-linecap="round" stroke-linejoin="round"/>`;
+const line = (d) => `<path d="${d}" fill="none" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.45" stroke-linecap="round" stroke-linejoin="round"/>`;
 
 function buildView(fatigue, opts) {
   const { defsId, regions, detailLines } = opts;
   const defs = `<defs><filter id="glow-${defsId}"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
-  const skin = `<path d="${SILHOUETTE}" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="0.8" stroke-linejoin="round"/>`;
-  const headNeck = `<path d="${HEAD}" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.14)" stroke-width="0.7" stroke-linejoin="round"/>`
-    + `<path d="${NECK}" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" stroke-linejoin="round"/>`;
+  const skin = `<path d="${SILHOUETTE}" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.3" stroke-width="0.8" stroke-linejoin="round"/>`;
+  const headNeck = `<path d="${HEAD}" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.3" stroke-width="0.7" stroke-linejoin="round"/>`
+    + `<path d="${NECK}" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.5" stroke-linejoin="round"/>`;
   return `<svg viewBox="0 0 140 260" width="112" height="204" style="display:block">`
     + defs + headNeck + skin
     + regions.join('')
