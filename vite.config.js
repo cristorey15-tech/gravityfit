@@ -42,7 +42,6 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       base,
-      includeAssets: ['sw.js'],
       manifest: {
         name: 'GravityFit',
         short_name: 'GravityFit',

@@ -3,7 +3,7 @@
 // ============================================
 
 import { Storage } from '../storage.js';
-import { Icons, Modal, Toast } from '../components.js';
+import { Icons, Modal, Toast, escapeHtml } from '../components.js';
 import { App } from '../app.js';
 import { Logger } from '../../src/Logger.js';
 
@@ -94,7 +94,7 @@ export const RoutinesScreen = {
     return `
       <div class="routine-card">
         <div class="routine-card-header">
-          <h3>${routine.name}</h3>
+          <h3>${escapeHtml(routine.name)}</h3>
           <div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-icon sm" onclick="event.stopPropagation();RoutinesScreen.exportRoutine('${routine.id}')" title="Exportar">🔗</button>
             <button class="btn btn-ghost btn-icon sm" onclick="event.stopPropagation();RoutinesScreen.showEditForm('${routine.id}')" title="Editar">✏️</button>
@@ -136,7 +136,7 @@ export const RoutinesScreen = {
     const html = `
       <div class="input-group" style="margin-bottom:12px">
         <label class="input-label">Nombre de la Rutina</label>
-        <input class="input" id="routine-name-input" value="${name}" placeholder="Ej: Push Day, Piernas...">
+        <input class="input" id="routine-name-input" value="${escapeHtml(name)}" placeholder="Ej: Push Day, Piernas...">
       </div>
       <div class="input-group" style="margin-bottom:16px">
         <label class="input-label">Carpeta (Opcional)</label>
@@ -167,9 +167,10 @@ export const RoutinesScreen = {
 
     this.builderExercises.forEach((e, i) => {
       const d = Storage.getExercise(e.exerciseId);
-      const name = d ? d.name : e.exerciseId;
+      const name = escapeHtml(d ? d.name : e.exerciseId);
       const gifUrl = d ? d.gifUrl : null;
       const icon = d ? d.icon : '🏋️';
+      const isCardio = d && d.type === 'cardio';
 
       const isFirstInSuperset = e.supersetId && currentSupersetId !== e.supersetId;
       const isLinkedToNext = e.supersetId && i < this.builderExercises.length - 1 && this.builderExercises[i + 1].supersetId === e.supersetId;
@@ -191,11 +192,12 @@ export const RoutinesScreen = {
             <div style="font-weight:600;font-size:0.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-            <input type="number" class="input input-number" value="${e.sets || 3}" min="1" style="width:48px"
-              onchange="RoutinesScreen.builderExercises[${i}].sets=parseInt(this.value)||3" inputmode="numeric">
+            <input type="number" class="input input-number" value="${e.sets || (isCardio ? 1 : 3)}" min="1" style="width:48px"
+              onchange="RoutinesScreen.builderExercises[${i}].sets=parseInt(this.value)||${isCardio ? 1 : 3}" inputmode="numeric">
             <span style="color:var(--color-text-tertiary);font-size:0.75rem">×</span>
-            <input type="number" class="input input-number" value="${e.reps || 10}" min="1" style="width:48px"
-              onchange="RoutinesScreen.builderExercises[${i}].reps=parseInt(this.value)||10" inputmode="numeric">
+            <input type="number" class="input input-number" value="${e.reps || (isCardio ? 30 : 10)}" min="1" style="width:48px"
+              onchange="RoutinesScreen.builderExercises[${i}].reps=parseInt(this.value)||${isCardio ? 30 : 10}" inputmode="numeric">
+            <span style="color:var(--color-text-tertiary);font-size:0.65rem">${isCardio ? 'min' : 'reps'}</span>
           </div>
           <button class="btn btn-ghost btn-icon sm" onclick="RoutinesScreen.removeBuilderExercise(${i})">✕</button>
         </div>`;
@@ -304,7 +306,7 @@ export const RoutinesScreen = {
     let html = toRender.map(e => `
       <div class="exercise-list-item" onclick="RoutinesScreen.addBuilderExercise('${e.id}')">
         ${e.gifUrl ? `<img src="${e.gifUrl}" alt="${e.name}" class="exercise-gif-thumb" loading="lazy" onerror="this.outerHTML='<div class=\\'exercise-gif-fallback\\'>${e.icon}</div>'">` : `<div class="exercise-gif-fallback">${e.icon}</div>`}
-        <div class="exercise-info"><h4>${e.name}</h4><p>${e.primaryMuscle}</p></div>
+        <div class="exercise-info"><h4>${escapeHtml(e.name)}</h4><p>${escapeHtml(e.primaryMuscle)}</p></div>
         <button class="btn btn-ghost btn-icon sm" onclick="event.stopPropagation(); Storage.toggleFavorite('${e.id}'); RoutinesScreen.updateExList()" style="font-size:1.2rem">
           ${favs.includes(e.id) ? '⭐' : '☆'}
         </button>
@@ -321,7 +323,11 @@ export const RoutinesScreen = {
   _currentEditId: null,
 
   addBuilderExercise(exerciseId) {
-    this.builderExercises.push({ exerciseId, sets: 3, reps: 10, restSeconds: 90 });
+    const d = Storage.getExercise(exerciseId);
+    const isCardio = d && d.type === 'cardio';
+    this.builderExercises.push(isCardio
+      ? { exerciseId, sets: 1, reps: 30, restSeconds: 60 }
+      : { exerciseId, sets: 3, reps: 10, restSeconds: 90 });
     // Go back to builder, preserving editId
     const name = document.getElementById('routine-name-input')?.value || '';
     const folder = document.getElementById('routine-folder-input')?.value || '';
@@ -400,7 +406,7 @@ export const RoutinesScreen = {
     
     Modal.show(`
       <p style="margin-bottom:16px;color:var(--color-text-secondary);font-size:0.875rem">
-        Asigna o cambia la carpeta de <strong>${routine.name}</strong>
+        Asigna o cambia la carpeta de <strong>${escapeHtml(routine.name)}</strong>
       </p>
       <div class="input-group" style="margin-bottom:16px">
         <label class="input-label">Carpeta</label>
@@ -586,8 +592,8 @@ export const RoutinesScreen = {
         <div id="planner-routines" style="display:flex;flex-wrap:wrap;gap:8px">
           ${routines.map(r => `
             <div class="planner-routine-chip" draggable="true" 
-              ondragstart="RoutinesScreen.onDragStart(event, '${r.id}', '${r.name}')">
-              🏋️ ${r.name}
+              ondragstart="RoutinesScreen.onDragStart(event, '${r.id}')">
+              🏋️ ${escapeHtml(r.name)}
             </div>
           `).join('')}
         </div>
@@ -600,8 +606,10 @@ export const RoutinesScreen = {
     `, { title: '📅 Planificador Semanal Visual' });
   },
 
-  onDragStart(e, routineId, name) {
-    e.dataTransfer.setData('text/plain', JSON.stringify({ id: routineId, name }));
+  onDragStart(e, routineId) {
+    // Never pass the routine name through the onclick attribute — look it up
+    const routine = Storage.getRoutine(routineId);
+    e.dataTransfer.setData('text/plain', JSON.stringify({ id: routineId, name: routine ? routine.name : '' }));
     e.dataTransfer.effectAllowed = 'copy';
     e.target.style.opacity = '0.5';
   },
@@ -654,7 +662,7 @@ export const RoutinesScreen = {
       const routine = this._plannerRoutines.find(r => r.id === slot.routineId);
       container.innerHTML = `
         <div class="planner-day-routine" onclick="RoutinesScreen.removePlannerDay(${day})">
-          <span style="font-size:0.7rem;font-weight:600">${routine ? routine.name.substring(0, 8) : '?'}</span>
+          <span style="font-size:0.7rem;font-weight:600">${routine ? escapeHtml(routine.name.substring(0, 8)) : '?'}</span>
           <span style="font-size:0.5rem;color:var(--color-text-tertiary);margin-top:2px">tocar = quitar</span>
         </div>`;
     } else {
@@ -751,7 +759,7 @@ export const RoutinesScreen = {
       html += `
         <div class="program-card ${prog.active ? 'active-program' : ''}">
           <div class="program-card-header">
-            <div class="program-card-name">${prog.name}</div>
+            <div class="program-card-name">${escapeHtml(prog.name)}</div>
             <div style="display:flex;gap:4px;align-items:center">
               <span class="program-week-badge">${prog.mode === 'rotation' ? 'Rotación' : `S${prog.currentWeek}/${prog.weeks}`}</span>
               <button class="btn btn-ghost btn-icon sm" onclick="RoutinesScreen.toggleProgramActive('${prog.id}')" title="${prog.active ? 'Desactivar' : 'Activar'}" style="font-size:1rem">${prog.active ? '✅' : '▶️'}</button>
@@ -770,7 +778,7 @@ export const RoutinesScreen = {
               ? (next.isToday ? '🎯 Entrenar Hoy: ' : `⏳ Descanso, Siguiente: `)
               : (next.isToday ? '🎯 Entrenar Hoy: ' : `⏳ Próximo (${dayNames[next.slot.day]}): `);
             return `<button class="btn btn-primary btn-block" style="margin-top:10px" onclick="App.startRoutineWorkout('${next.routine.id}')">
-              ${nextLabel}${next.routine.name}
+              ${nextLabel}${escapeHtml(next.routine.name)}
             </button>`;
           })() : ''}
         </div>`;
@@ -826,7 +834,7 @@ export const RoutinesScreen = {
               <span style="width:80px;font-size:var(--font-size-sm);color:var(--color-text-secondary)">${d}</span>
               <select class="input" id="prog-day-${i}" style="flex:1">
                 <option value="">Descanso</option>
-                ${routines.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}
+                ${routines.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}
               </select>
             </div>
           `).join('')}
@@ -847,7 +855,7 @@ export const RoutinesScreen = {
                 <option value="">--</option>
                 <option value="rest" style="color:var(--color-info)">💤 Día de Descanso</option>
                 <option disabled>──────</option>
-                ${routines.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}
+                ${routines.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}
               </select>
             </div>
           `).join('')}
@@ -999,7 +1007,7 @@ export const RoutinesScreen = {
         ${templates.map(t => `
           <div class="template-card" onclick="RoutinesScreen.importTemplate('${t.id}')">
             <div class="template-card-icon">${t.icon}</div>
-            <div class="template-card-name">${t.name}</div>
+            <div class="template-card-name">${escapeHtml(t.name)}</div>
             <div class="template-card-desc">${t.desc}</div>
           </div>
         `).join('')}

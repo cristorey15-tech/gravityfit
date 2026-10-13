@@ -3,7 +3,7 @@
 // ============================================
 
 import { Storage } from './storage.js';
-import { Modal, Toast } from './components.js';
+import { Modal, Toast, escapeHtml } from './components.js';
 import { App } from './app.js';
 
 export const AICoach = {
@@ -316,7 +316,7 @@ export const AICoach = {
     Modal.show(`
       <div style="text-align:center;margin-bottom:16px">
         <div style="font-size:3rem;margin-bottom:8px">🧠</div>
-        <h3 style="font-size:1.25rem;font-weight:bold;margin-bottom:8px">${aiWorkout.name}</h3>
+        <h3 style="font-size:1.25rem;font-weight:bold;margin-bottom:8px">${escapeHtml(aiWorkout.name)}</h3>
         <p style="font-size:0.875rem;color:var(--color-text-secondary)">
           He analizado tu fatiga muscular y tu 1RM para calcular los pesos óptimos de hoy.
         </p>
@@ -325,7 +325,7 @@ export const AICoach = {
         ${aiWorkout.exercises.map(e => {
           const exData = Storage.getExercise(e.exerciseId);
           const setsInfo = e.sets.filter(s => s.type==='normal').map(s => `${s.weight||'?'}x${s.reps}`).join(', ');
-          return `<div style="margin-bottom:4px"><strong>${exData ? exData.name : e.exerciseId}</strong><br><span style="color:var(--color-accent)">Sugerido: ${setsInfo}</span></div>`;
+          return `<div style="margin-bottom:4px"><strong>${escapeHtml(exData ? exData.name : e.exerciseId)}</strong><br><span style="color:var(--color-accent)">Sugerido: ${escapeHtml(setsInfo)}</span></div>`;
         }).join('')}
       </div>
       <div style="display:flex;gap:8px">

@@ -3,7 +3,8 @@
 // ============================================
 
 import { Storage } from '../storage.js';
-import { Icons, Modal, Toast } from '../components.js';
+import { Icons, Modal, Toast, escapeHtml } from '../components.js';
+import { CloudSync } from '../sync.js';
 import { App } from '../app.js';
 
 export const CompetitionScreen = {
@@ -55,14 +56,14 @@ export const CompetitionScreen = {
       <div class="screen-header">
         <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
           <div>
-            <h1 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold)">${comp.name}</h1>
+            <h1 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold)">${escapeHtml(comp.name)}</h1>
             <div style="font-size:var(--font-size-xs);color:var(--color-text-secondary)">${comp.members?.length || 0} miembros${myRank > 0 ? ` · Tu posición: #${myRank}` : ''}</div>
           </div>
           <button class="btn btn-ghost btn-icon" onclick="CompetitionScreen.showSettingsModal()" title="Opciones">⚙️</button>
         </div>
         <div style="display:flex;gap:6px;margin-top:12px">
           ${comps.length > 1 ? comps.map(c => `
-            <button class="chip ${c.id === this._selectedCompId ? 'active' : ''}" onclick="CompetitionScreen.selectComp('${c.id}')">${c.name}</button>
+            <button class="chip ${c.id === this._selectedCompId ? 'active' : ''}" onclick="CompetitionScreen.selectComp('${c.id}')">${escapeHtml(c.name)}</button>
           `).join('') : ''}
           <button class="chip" onclick="CompetitionScreen.showCreateModal()">+ Nueva</button>
         </div>
@@ -128,9 +129,9 @@ export const CompetitionScreen = {
               <div style="flex:1;text-align:center;max-width:100px">
                 <div style="font-size:2rem;margin-bottom:4px">${podiumEmojis[idx]}</div>
                 <div style="width:48px;height:48px;border-radius:50%;background:${isMe ? 'var(--color-accent)' : 'var(--color-bg-card)'};border:2px solid ${isMe ? 'var(--color-accent)' : 'var(--color-border)'};display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:0.9rem;font-weight:bold;color:${isMe ? '#000' : 'var(--color-text)'}">
-                  ${(p.name || '?').charAt(0).toUpperCase()}
+                  ${escapeHtml((p.name || '?').charAt(0).toUpperCase())}
                 </div>
-                <div style="font-size:0.75rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : (p.name || '???')}</div>
+                <div style="font-size:0.75rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : escapeHtml(p.name || '???')}</div>
                 <div style="font-size:0.7rem;color:var(--color-text-secondary)">${this._formatVol(p.totalVolume)} · ${p.totalWorkouts}d</div>
                 <div style="height:${podiumHeights[idx]};background:linear-gradient(180deg, ${idx === 0 ? 'rgba(255,215,0,0.15)' : idx === 1 ? 'rgba(192,192,192,0.12)' : 'rgba(205,127,50,0.1)'} 0%, transparent 100%);border-radius:8px 8px 0 0;margin-top:8px;border:1px solid ${idx === 0 ? 'rgba(255,215,0,0.3)' : idx === 1 ? 'rgba(192,192,192,0.2)' : 'rgba(205,127,50,0.2)'}"></div>
               </div>`;
@@ -147,10 +148,10 @@ export const CompetitionScreen = {
         <div class="comp-rank-card ${isMe ? 'me' : ''}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--color-bg-card);border:1px solid ${isMe ? 'var(--color-accent)' : 'var(--color-border)'};border-radius:12px;margin-bottom:8px;${isMe ? 'box-shadow:0 0 12px rgba(163,255,18,0.1)' : ''}">
           <div style="width:28px;text-align:center;font-size:${i < 3 ? '1.1rem' : '0.8rem'};font-weight:700;color:${i < 3 ? 'inherit' : 'var(--color-text-secondary)'}">${medal}</div>
           <div style="width:36px;height:36px;border-radius:50%;background:${isMe ? 'var(--color-accent)' : 'var(--color-bg-input)'};display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:bold;color:${isMe ? '#000' : 'var(--color-text)'};flex-shrink:0">
-            ${(entry.name || '?').charAt(0).toUpperCase()}
+            ${escapeHtml((entry.name || '?').charAt(0).toUpperCase())}
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:0.85rem;font-weight:600;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : (entry.name || 'Desconocido')}</div>
+            <div style="font-size:0.85rem;font-weight:600;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : escapeHtml(entry.name || 'Desconocido')}</div>
             <div style="font-size:0.65rem;color:var(--color-text-tertiary)">${entry.days} días activos</div>
           </div>
           <div style="text-align:right;flex-shrink:0">
@@ -206,7 +207,7 @@ export const CompetitionScreen = {
         html += `
           <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${isMe ? 'var(--color-accent-dim)' : 'var(--color-bg-card)'};border:1px solid ${isMe ? 'var(--color-accent)' : 'var(--color-border)'};border-radius:10px;margin-bottom:6px">
             <span style="font-weight:700;width:24px;text-align:center;color:${i === 0 ? 'var(--color-accent)' : 'var(--color-text-secondary)'}">#${i + 1}</span>
-            <span style="font-weight:600;font-size:0.85rem;flex:1;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : (entry.name || '?')}</span>
+            <span style="font-weight:600;font-size:0.85rem;flex:1;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : escapeHtml(entry.name || '?')}</span>
             <span style="font-size:0.8rem;font-weight:700;color:var(--color-accent)">${this._formatVol(entry.volume || 0)}</span>
           </div>`;
       });
@@ -269,10 +270,10 @@ export const CompetitionScreen = {
         <div style="background:${isMe ? 'var(--color-accent-dim)' : 'var(--color-bg-card)'};border:1px solid ${isMe ? 'var(--color-accent)' : 'var(--color-border)'};border-radius:12px;padding:14px 16px;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
             <div style="width:36px;height:36px;border-radius:50%;background:${isMe ? 'var(--color-accent)' : 'var(--color-bg-input)'};display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:bold;color:${isMe ? '#000' : 'var(--color-text)'};flex-shrink:0">
-              ${(entry.name || '?').charAt(0).toUpperCase()}
+              ${escapeHtml((entry.name || '?').charAt(0).toUpperCase())}
             </div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:0.85rem;font-weight:600;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : (entry.name || '???')} ${medal}</div>
+              <div style="font-size:0.85rem;font-weight:600;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : escapeHtml(entry.name || '???')} ${medal}</div>
               <div style="font-size:0.65rem;color:var(--color-text-tertiary)">${hasData ? `${entry.workouts} entrenos esta semana` : 'Sin datos aún'}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;display:flex;align-items:center;gap:8px">
@@ -280,7 +281,7 @@ export const CompetitionScreen = {
                 <div style="font-size:1rem;font-weight:700;color:var(--color-accent)">${this._formatVol(entry.volume)}</div>
                 ${entry.streak != null && entry.streak > 0 ? `<div style="font-size:0.65rem;color:var(--color-text-tertiary)">🔥 ${entry.streak} días</div>` : ''}
               </div>
-              ${!isMe ? `<button class="btn btn-ghost btn-icon" style="font-size:0.7rem;padding:4px 6px" onclick="CompetitionScreen.confirmRemoveFriend('${entry.userId}', '${(entry.name || '').replace(/'/g, "\\'")}')" title="Eliminar">✕</button>` : ''}
+              ${!isMe ? `<button class="btn btn-ghost btn-icon" style="font-size:0.7rem;padding:4px 6px" onclick="CompetitionScreen.confirmRemoveFriend('${entry.userId}')" title="Eliminar">✕</button>` : ''}
             </div>
           </div>
           <div style="height:6px;background:var(--color-bg-input);border-radius:3px;overflow:hidden">
@@ -301,7 +302,7 @@ export const CompetitionScreen = {
             ? `👀 ${topFriend.name} te lleva ${this._formatVol(Math.abs(diff))} esta semana — ¡a darle!`
             : `🤝 Empate técnico con ${topFriend.name} esta semana`;
         html += `
-          <div style="text-align:center;padding:12px;background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:10px;margin-top:8px;font-size:0.8rem;color:var(--color-text-secondary)">${msg}</div>`;
+          <div style="text-align:center;padding:12px;background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:10px;margin-top:8px;font-size:0.8rem;color:var(--color-text-secondary)">${escapeHtml(msg)}</div>`;
       }
     }
 
@@ -320,7 +321,7 @@ export const CompetitionScreen = {
         <div style="font-size:0.85rem;font-family:monospace;letter-spacing:1px;background:var(--color-bg-input);padding:8px 16px;border-radius:8px;margin-bottom:12px;word-break:break-all;color:var(--color-accent);font-weight:600">${code}</div>
         <div style="display:flex;gap:8px;justify-content:center">
           <button class="btn btn-primary btn-sm" onclick="CompetitionScreen.copyCode('${code}')">📋 Copiar</button>
-          <button class="btn btn-outline btn-sm" onclick="CompetitionScreen.shareInvite('${comp.name}')">📤 Compartir</button>
+          <button class="btn btn-outline btn-sm" onclick="CompetitionScreen.shareInvite('${comp.id}')">📤 Compartir</button>
         </div>
       </div>`;
 
@@ -332,10 +333,10 @@ export const CompetitionScreen = {
       html += `
         <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--color-bg-card);border:1px solid ${isMe ? 'var(--color-accent)' : 'var(--color-border)'};border-radius:10px;margin-bottom:6px">
           <div style="width:36px;height:36px;border-radius:50%;background:${isMe ? 'var(--color-accent)' : 'var(--color-bg-input)'};display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:bold;color:${isMe ? '#000' : 'var(--color-text)'}">
-            ${(m.name || '?').charAt(0).toUpperCase()}
+            ${escapeHtml((m.name || '?').charAt(0).toUpperCase())}
           </div>
           <div style="flex:1">
-            <div style="font-size:0.85rem;font-weight:600;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : (m.name || 'Desconocido')}</div>
+            <div style="font-size:0.85rem;font-weight:600;${isMe ? 'color:var(--color-accent)' : ''}">${isMe ? 'Tú' : escapeHtml(m.name || 'Desconocido')}</div>
             <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Unido ${joined}</div>
           </div>
         </div>`;
@@ -438,12 +439,14 @@ export const CompetitionScreen = {
     }
   },
 
-  shareInvite(compName) {
-    const code = Storage.generateCompetitionCode(Storage.getCompetition(this._selectedCompId));
+  shareInvite(compId) {
+    const comp = Storage.getCompetition(compId);
+    if (!comp) return;
+    const code = Storage.generateCompetitionCode(comp);
     if (navigator.share) {
       navigator.share({
         title: 'GravityFit Competencia',
-        text: `🏆 ¡Únete a mi competencia "${compName}" en GravityFit!\n\nCódigo: ${code}\n\nAbre GravityFit → Competencia → Unirse con código`,
+        text: `🏆 ¡Únete a mi competencia "${comp.name}" en GravityFit!\n\nCódigo: ${code}\n\nAbre GravityFit → Competencia → Unirse con código`,
       }).catch(() => {});
     } else {
       this.copyCode(code);
@@ -572,9 +575,13 @@ export const CompetitionScreen = {
     this.render();
   },
 
-  confirmRemoveFriend(userId, name) {
+  confirmRemoveFriend(userId) {
+    // Look the name up locally instead of embedding it in the onclick attribute
+    // (a name inside a JS string in HTML is a double-escaping XSS vector)
+    const friend = Storage.getFriends().find(f => f.userId === userId);
+    const name = friend ? friend.name : 'este amigo';
     Modal.show(`
-      <p style="margin-bottom:16px;color:var(--color-text-secondary)">¿Eliminar a ${name} de tus amigos?</p>
+      <p style="margin-bottom:16px;color:var(--color-text-secondary)">¿Eliminar a ${escapeHtml(name)} de tus amigos?</p>
       <div style="display:flex;gap:12px">
         <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
         <button class="btn btn-danger flex-1" onclick="CompetitionScreen.removeFriend('${userId}')">Eliminar</button>

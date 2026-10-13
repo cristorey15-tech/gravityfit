@@ -3,7 +3,7 @@
 // ============================================
 
 import { Storage } from '../storage.js';
-import { Icons, Modal, Toast, LineChart } from '../components.js';
+import { Icons, Modal, Toast, LineChart, escapeHtml } from '../components.js';
 
 export const ExercisesScreen = {
   activeFilter: 'all',
@@ -61,8 +61,8 @@ export const ExercisesScreen = {
           <div class="exercise-list-item" onclick="ExercisesScreen.showDetail('${e.id}')">
             ${this.renderThumb(e)}
             <div class="exercise-info">
-              <h4>${e.name}</h4>
-              <p>${e.primaryMuscle}${e.secondaryMuscles && e.secondaryMuscles.length ? ' • ' + e.secondaryMuscles.join(', ') : ''}</p>
+              <h4>${escapeHtml(e.name)}</h4>
+              <p>${escapeHtml(e.primaryMuscle)}${e.secondaryMuscles && e.secondaryMuscles.length ? ' • ' + escapeHtml(e.secondaryMuscles.join(', ')) : ''}</p>
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               ${e.isCustom ? '<span class="badge badge-sm">Custom</span>' : ''}
@@ -79,7 +79,7 @@ export const ExercisesScreen = {
 
   renderThumb(e) {
     if (e.gifUrl) {
-      return `<img src="${e.gifUrl}" alt="${e.name}" class="exercise-gif-thumb" loading="lazy" onerror="this.outerHTML='<div class=\\'exercise-gif-fallback\\'>${e.icon}</div>'">`;
+      return `<img src="${e.gifUrl}" alt="${escapeHtml(e.name)}" class="exercise-gif-thumb" loading="lazy" onerror="this.outerHTML='<div class=\\'exercise-gif-fallback\\'>${e.icon}</div>'">`;
     }
     return `<div class="exercise-gif-fallback">${e.icon}</div>`;
   },
@@ -230,7 +230,7 @@ export const ExercisesScreen = {
 
     Modal.show(`
       <div style="text-align:center;margin-bottom:16px">
-        ${e.gifUrl ? `<img src="${e.gifUrl}" alt="${e.name}" class="exercise-gif-modal" onerror="this.outerHTML='<div style=\\'font-size:4rem;padding:24px\\'>${e.icon}</div>'">` : `<div style="font-size:4rem;padding:24px">${e.icon}</div>`}
+        ${e.gifUrl ? `<img src="${e.gifUrl}" alt="${escapeHtml(e.name)}" class="exercise-gif-modal" onerror="this.outerHTML='<div style=\\'font-size:4rem;padding:24px\\'>${e.icon}</div>'">` : `<div style="font-size:4rem;padding:24px">${e.icon}</div>`}
         <div style="font-size:0.75rem;color:var(--color-text-secondary);text-transform:capitalize;margin-top:12px">${e.primaryMuscle}${e.secondaryMuscles && e.secondaryMuscles.length ? ' • ' + e.secondaryMuscles.join(', ') : ''}</div>
       </div>
       ${chartHtml}

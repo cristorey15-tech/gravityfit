@@ -2,7 +2,7 @@
 // GravityFit — Gamification Tests
 // ============================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Gamification } from '../js/gamification.js';
 import { Storage } from '../js/storage.js';
 
@@ -241,6 +241,73 @@ describe('Gamification', () => {
 
       const nightOwl = result.newBadges.find(b => b.id === 'night_owl');
       expect(nightOwl).toBeDefined();
+    });
+  });
+
+  // Regression tests for the P0 UTC bug: week keys were built with
+  // toISOString(), which shifts the local Monday back to Sunday for users
+  // east of UTC (Europe, etc.), resetting weekly challenges a day late.
+  describe('Weekly challenges — local week start', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const keyToMonday = (key) => {
+      const [y, m, d] = key.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    };
+
+    it('_getWeekMonday returns a Monday at 00:30 local (UTC+ bug case)', () => {
+      vi.useFakeTimers();
+      // Monday 5 Oct 2026, 00:30 local time
+      vi.setSystemTime(new Date(2026, 9, 5, 0, 30, 0));
+
+      const key = Gamification._getWeekMonday();
+
+      expect(key).toBe('2026-10-05');
+      expect(keyToMonday(key).getDay()).toBe(1);
+    });
+
+    it('_getWeekMonday on a Sunday returns the Monday of that same week', () => {
+      vi.useFakeTimers();
+      // Sunday 11 Oct 2026, 23:45 local time
+      vi.setSystemTime(new Date(2026, 9, 11, 23, 45, 0));
+
+      const key = Gamification._getWeekMonday();
+
+      expect(key).toBe('2026-10-05');
+      expect(keyToMonday(key).getDay()).toBe(1);
+    });
+
+    it('_getWeekMonday midweek returns that week\'s Monday', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2026, 9, 7, 15, 0, 0)); // Wed 7 Oct 2026
+
+      expect(Gamification._getWeekMonday()).toBe('2026-10-05');
+    });
+
+    it('week key format matches Storage._localDateStr (local, not UTC)', () => {
+      vi.useFakeTimers();
+      // Early hours of a new year — a classic spot for off-by-one date bugs
+      vi.setSystemTime(new Date(2026, 0, 5, 0, 15, 0)); // Mon 5 Jan 2026
+
+      const key = Gamification._getWeekMonday();
+      const parsed = keyToMonday(key);
+
+      expect(parsed.getDay()).toBe(1);
+      expect(key).toBe(Storage._localDateStr(parsed));
+    });
+
+    it('weekly challenges stay stable across a full week window', () => {
+      vi.useFakeTimers();
+      const keys = new Set();
+      // Every hour from Monday 00:00 to Sunday 23:00
+      for (let h = 0; h < 7 * 24; h++) {
+        vi.setSystemTime(new Date(2026, 9, 5, 0, 0, 0) + h * 3600000);
+        keys.add(Gamification._getWeekMonday());
+      }
+
+      expect([...keys]).toEqual(['2026-10-05']);
     });
   });
 });

@@ -3,7 +3,8 @@
 // ============================================
 
 import { Storage } from '../storage.js';
-import { Icons, Toast, Modal } from '../components.js';
+import { Icons, Toast, Modal, escapeHtml } from '../components.js';
+import { Calories } from '../calories.js';
 import { App } from '../app.js';
 
 export const HomeScreen = {
@@ -49,7 +50,7 @@ export const HomeScreen = {
     container.innerHTML = `
       <div class="screen-header">
         <div class="home-greeting">
-          <h1>${greeting}, ${user.name}</h1>
+          <h1>${greeting}, ${escapeHtml(user.name)}</h1>
           <p>${this.formatDate(new Date())}</p>
           <div class="xp-level-badge">${level.icon} ${level.name} · ${level.xp} XP</div>
         </div>
@@ -75,6 +76,19 @@ export const HomeScreen = {
             <div class="stat-label">Racha (días)</div>
           </div>
         </div>
+
+        ${(() => {
+          const kc = Calories.getTotalCalories(weekWorkouts, user);
+          const steps = weekWorkouts.reduce((s, w) => s + (w.steps || 0), 0);
+          return (kc > 0 || steps > 0) ? `
+        <div class="card" style="display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:12px">
+          <span style="font-size:1.4rem">🔥</span>
+          <div style="flex:1">
+            <div style="font-size:0.9375rem;font-weight:700">${kc.toLocaleString('es-ES')} kcal${steps > 0 ? ` · 👣 ${steps.toLocaleString('es-ES')} pasos` : ''}</div>
+            <div style="font-size:0.7rem;color:var(--color-text-secondary)">Quemadas esta semana (estimado + sensor)</div>
+          </div>
+        </div>` : '';
+        })()}
 
         ${this.renderBodyWeightWidget(user)}
 
@@ -110,7 +124,7 @@ export const HomeScreen = {
           </div>
           <div class="card" onclick="HistoryScreen.showWorkoutDetail('${lastWorkout.id}')">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-              <h4 style="font-weight:600;font-size:0.9375rem">${lastWorkout.name || 'Entrenamiento'}</h4>
+              <h4 style="font-weight:600;font-size:0.9375rem">${escapeHtml(lastWorkout.name || 'Entrenamiento')}</h4>
               <span style="font-size:0.75rem;color:var(--color-text-secondary)">${this.timeAgo(lastWorkout.finishedAt)}</span>
             </div>
             <div style="display:flex;gap:16px;font-size:0.75rem;color:var(--color-text-secondary);align-items:center">
@@ -130,7 +144,7 @@ export const HomeScreen = {
           <div class="quick-routines-scroll">
             ${routines.slice(0, 6).map(r => `
               <div class="quick-routine-card" onclick="App.startRoutineWorkout('${r.id}')">
-                <h4>${r.name}</h4>
+                <h4>${escapeHtml(r.name)}</h4>
                 <p>${(r.exercises || []).length} ejercicios</p>
               </div>
             `).join('')}
@@ -357,7 +371,7 @@ export const HomeScreen = {
       if (lastRoutine) {
         html += `
           <button class="chip ${lastRoutine ? 'active' : ''}" onclick="App.startRoutineWorkout('${lastRoutine.id}')">
-            🔄 ${lastRoutine.name}
+            🔄 ${escapeHtml(lastRoutine.name)}
           </button>`;
       }
     }
@@ -368,7 +382,7 @@ export const HomeScreen = {
       if (next && next.routine && next.routine.id !== 'rest' && next.isToday) {
         html += `
           <button class="chip active" onclick="App.startRoutineWorkout('${next.routine.id}')">
-            📅 ${next.routine.name}
+            📅 ${escapeHtml(next.routine.name)}
           </button>`;
       }
     }
@@ -378,7 +392,7 @@ export const HomeScreen = {
     favRoutines.forEach(r => {
       html += `
         <button class="chip" onclick="App.startRoutineWorkout('${r.id}')">
-          ⭐ ${r.name}
+          ⭐ ${escapeHtml(r.name)}
         </button>`;
     });
     
@@ -439,7 +453,7 @@ export const HomeScreen = {
           <div style="text-align:center;padding:8px 0">
             <div style="font-size:3rem;margin-bottom:8px">📊</div>
             <h3 style="margin-bottom:4px">Resumen de ${monthName}</h3>
-            <div style="color:var(--color-text-secondary);font-size:0.85rem;margin-bottom:20px">¡Impresionante, ${user.name}!</div>
+            <div style="color:var(--color-text-secondary);font-size:0.85rem;margin-bottom:20px">¡Impresionante, ${escapeHtml(user.name)}!</div>
             
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
               <div style="background:var(--color-bg-card);padding:16px;border-radius:12px">
@@ -463,9 +477,9 @@ export const HomeScreen = {
             ${bestW ? `
             <div style="background:var(--color-accent-dim);padding:12px;border-radius:12px;margin-bottom:20px">
               <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-bottom:4px">🏆 Mejor Entrenamiento</div>
-              <div style="font-weight:bold;font-size:0.9rem">${bestW.name}</div>
+              <div style="font-weight:bold;font-size:0.9rem">${escapeHtml(bestW.name)}</div>
               <div style="font-size:0.8rem;color:var(--color-accent)">${HomeScreen.formatVolume(Storage.getTotalVolume(bestW), user.units)} · ${HomeScreen.formatDuration(bestW.duration)}</div>
-              <div style="font-size:0.7rem;color:var(--color-text-tertiary);margin-top:4px">${bestExData.map(e => e?.name || '').filter(Boolean).join(', ')}</div>
+              <div style="font-size:0.7rem;color:var(--color-text-tertiary);margin-top:4px">${escapeHtml(bestExData.map(e => e?.name || '').filter(Boolean).join(', '))}</div>
             </div>` : ''}
             
             <button class="btn btn-primary btn-block" onclick="Modal.hide()">🔥 ¡A por el siguiente mes!</button>
@@ -850,7 +864,7 @@ export const HomeScreen = {
       missedHtml = `
         <div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:0.8rem">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <span style="color:var(--color-warning)">⚠️ Perdiste: ${m.routineName}</span>
+            <span style="color:var(--color-warning)">⚠️ Perdiste: ${escapeHtml(m.routineName)}</span>
             <div style="display:flex;gap:4px">
               <button class="btn btn-primary btn-sm" style="font-size:0.7rem;padding:4px 8px" onclick="HomeScreen.rescheduleMissed(0)">Reprogramar</button>
               <button class="btn btn-ghost btn-sm" style="font-size:0.7rem;padding:4px 8px" onclick="HomeScreen.skipMissed(0)">Omitir</button>
@@ -877,7 +891,7 @@ export const HomeScreen = {
     return `
       <div class="program-card active-program" style="margin-top:12px">
         <div class="program-card-header">
-          <div class="program-card-name" style="display:flex;align-items:center;gap:8px"><div style="width:16px;height:16px">${Icons.calendar}</div> ${program.name}</div>
+          <div class="program-card-name" style="display:flex;align-items:center;gap:8px"><div style="width:16px;height:16px">${Icons.calendar}</div> ${escapeHtml(program.name)}</div>
           <span class="program-week-badge">${program.mode === 'rotation' ? 'Rotación' : `Semana ${program.currentWeek}/${program.weeks}`}</span>
         </div>
         <div class="program-progress-bar"><div class="program-progress-fill" style="width:${weekPct}%"></div></div>
@@ -898,7 +912,7 @@ export const HomeScreen = {
             </button>
           ` : `
             <button class="btn btn-primary btn-block" style="margin-top:8px" onclick="App.startRoutineWorkout('${next.routine.id}')">
-              ${nextLabel}${next.routine.name}
+              ${nextLabel}${escapeHtml(next.routine.name)}
             </button>
           `
         ) : '<div style="text-align:center;font-size:var(--font-size-sm);color:var(--color-text-secondary);margin-top:8px">No hay rutinas programadas</div>'}
@@ -941,12 +955,12 @@ export const HomeScreen = {
         <div style="display:flex;align-items:center;gap:12px">
           <div style="width:36px;height:36px;border-radius:50%;background:rgba(251,191,36,0.1);display:flex;align-items:center;justify-content:center;font-size:1.1rem">🏆</div>
           <div style="flex:1">
-            <div style="font-size:0.75rem;font-weight:600;color:var(--color-text)">${comp.name}</div>
+            <div style="font-size:0.75rem;font-weight:600;color:var(--color-text)">${escapeHtml(comp.name)}</div>
             <div style="font-size:0.65rem;color:var(--color-text-secondary)">${comp.members?.length || 0} miembros${myRank > 0 ? ` · Tu rank: #${myRank}` : ''}</div>
           </div>
           ${topUser ? `<div style="text-align:right">
             <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Líder</div>
-            <div style="font-size:0.75rem;font-weight:600;color:var(--color-accent)">${topUser.name || '???'}</div>
+            <div style="font-size:0.75rem;font-weight:600;color:var(--color-accent)">${escapeHtml(topUser.name || '???')}</div>
           </div>` : ''}
           <div style="font-size:1rem;color:var(--color-text-tertiary)">→</div>
         </div>

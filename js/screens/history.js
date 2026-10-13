@@ -3,8 +3,9 @@
 // ============================================
 
 import { Storage } from '../storage.js';
-import { Icons, Modal, Toast } from '../components.js';
+import { Icons, Modal, Toast, escapeHtml } from '../components.js';
 import { HomeScreen } from './home.js';
+import { Calories } from '../calories.js';
 import { App } from '../app.js';
 
 export const HistoryScreen = {
@@ -86,7 +87,7 @@ export const HistoryScreen = {
           oninput="HistoryScreen._historyFilter=this.value;HistoryScreen.render()" style="flex:2">
         <select class="input" style="flex:1;font-size:0.75rem" onchange="HistoryScreen._historyExerciseFilter=this.value;HistoryScreen.render()">
           <option value="">Todos los ejercicios</option>
-          ${usedExercises.map(e => `<option value="${e.id}" ${this._historyExerciseFilter === e.id ? 'selected' : ''}>${e.name}</option>`).join('')}
+          ${usedExercises.map(e => `<option value="${e.id}" ${this._historyExerciseFilter === e.id ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}
         </select>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -106,11 +107,13 @@ export const HistoryScreen = {
         const vol = Storage.getTotalVolume(w);
         return `
           <div class="history-workout-card" onclick="HistoryScreen.showWorkoutDetail('${w.id}')">
-            <h4>${w.name || 'Entrenamiento'}</h4>
+            <h4>${escapeHtml(w.name || 'Entrenamiento')}</h4>
             <div class="meta">
               <span>${this.formatDate(w.finishedAt)}</span>
               <span style="display:inline-flex;align-items:center;gap:4px"><div style="width:14px;height:14px">${Icons.timer}</div> ${HomeScreen.formatDuration(w.duration)}</span>
               <span style="display:inline-flex;align-items:center;gap:4px"><div style="width:14px;height:14px">${Icons.award}</div> ${HomeScreen.formatVolume(vol, user.units)}</span>
+              ${(() => { const kc = w.calories?.kcal > 0 ? w.calories : Calories.getWorkoutCalories(w, user); return kc.kcal > 0 ? `<span style="display:inline-flex;align-items:center;gap:4px">🔥 ${kc.source === 'hr' ? '' : '~'}${kc.kcal}</span>` : ''; })()}
+              ${w.steps > 0 ? `<span style="display:inline-flex;align-items:center;gap:4px">👣 ${w.steps.toLocaleString('es-ES')}</span>` : ''}
             </div>
             <div class="exercises-summary">${exNames.join(', ')}${(w.exercises || []).length > 3 ? ' ...' : ''}</div>
           </div>`;
@@ -300,7 +303,7 @@ export const HistoryScreen = {
 
     chartExercises.forEach(([exId]) => {
       const exData = Storage.getExercise(exId);
-      const name = exData ? exData.name : exId;
+      const name = escapeHtml(exData ? exData.name : exId);
       html += `
         <div class="progress-chart-container">
           <h4>${name} — Peso Máximo</h4>
@@ -558,7 +561,7 @@ export const HistoryScreen = {
         <div class="pr-record-card">
           <div class="pr-rank">${medal || (i + 1)}</div>
           <div class="pr-info">
-            <div class="pr-name">${pr.name}</div>
+            <div class="pr-name">${escapeHtml(pr.name)}</div>
             <div class="pr-date">${dateStr}</div>
           </div>
           <div class="pr-value">
@@ -587,7 +590,7 @@ export const HistoryScreen = {
     
     let exHtml = (w.exercises || []).map((ex, i) => {
       const d = Storage.getExercise(ex.exerciseId);
-      const name = d ? d.name : ex.exerciseId;
+      const name = escapeHtml(d ? d.name : ex.exerciseId);
       
       let setsHtml;
       if (editing) {
@@ -614,7 +617,7 @@ export const HistoryScreen = {
         }).join('');
       }
       
-      const notesHtml = ex.notes ? `<div style="margin-top:4px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px;font-size:0.75rem;color:var(--color-text-secondary)">📝 ${ex.notes}</div>` : '';
+      const notesHtml = ex.notes ? `<div style="margin-top:4px;padding:6px 8px;background:rgba(255,255,255,0.04);border-radius:6px;font-size:0.75rem;color:var(--color-text-secondary)">📝 ${escapeHtml(ex.notes)}</div>` : '';
       const rpeHtml = ex.rpe ? `<span style="font-size:0.75rem;color:var(--color-warning);margin-left:8px">RPE ${ex.rpe}</span>` : '';
       
       const isFirstInSuperset = ex.supersetId && currentSupersetId !== ex.supersetId;
@@ -650,7 +653,20 @@ export const HistoryScreen = {
           <div style="font-size:1rem;font-weight:bold;color:var(--color-warning)">${w.heartRateData.totalCalories}</div>
           <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Cal</div>
         </div>
-      </div>` : '';
+      </div>` : (() => {
+        const kc = w.calories?.kcal > 0 ? w.calories : Calories.getWorkoutCalories(w, user);
+        return kc.kcal > 0 ? `
+      <div style="display:flex;gap:12px;margin-bottom:16px;padding:12px;background:var(--color-bg-card);border-radius:var(--radius-md)">
+        <div style="flex:1;text-align:center">
+          <div style="font-size:1rem;font-weight:bold;color:var(--color-warning)">${kc.source === 'hr' ? '' : '~'}${kc.kcal}</div>
+          <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Calorías ${kc.source === 'hr' ? '(sensor)' : '(estimado)'}</div>
+        </div>
+        ${w.steps > 0 ? `
+        <div style="flex:1;text-align:center">
+          <div style="font-size:1rem;font-weight:bold;color:var(--color-info)">${w.steps.toLocaleString('es-ES')}</div>
+          <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Pasos (estimado)</div>
+        </div>` : ''}
+      </div>` : ''; })();
 
     Modal.show(`
       <div style="display:flex;gap:16px;margin-bottom:16px;font-size:0.8125rem;color:var(--color-text-secondary)">
@@ -686,6 +702,8 @@ export const HistoryScreen = {
       sets: (ex.sets || []).map(s => ({
         weight: s.weight,
         reps: s.reps,
+        duration: s.duration,
+        distance: s.distance,
         type: s.type || 'normal',
         completed: false
       }))      }));
@@ -780,7 +798,7 @@ export const HistoryScreen = {
     
     sorted.forEach(({ id, data }) => {
       const ex = Storage.getExercise(id);
-      const name = ex ? ex.name : id;
+      const name = escapeHtml(ex ? ex.name : id);
       const values = data.map(d => ({ value: d.maxW, label: new Date(d.date).toLocaleDateString('es-ES', { day:'numeric', month:'short' }) }));
       
       html += `

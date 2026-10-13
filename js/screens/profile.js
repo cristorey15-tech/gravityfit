@@ -3,9 +3,10 @@
 // ============================================
 
 import { Storage } from '../storage.js';
-import { Icons, Modal, Toast } from '../components.js';
+import { Icons, Modal, Toast, escapeHtml } from '../components.js';
 import { HomeScreen } from './home.js';
 import { StorageHealth } from '../storage-health.js';
+import { Calories } from '../calories.js';
 
 export const ProfileScreen = {
   render() {
@@ -69,7 +70,7 @@ export const ProfileScreen = {
       <div class="screen-header">
         <div class="profile-header" style="position:relative;overflow:hidden">
           <div class="profile-avatar" style="border:2px solid var(--color-accent);box-shadow:0 0 15px rgba(167,139,250,0.4)">${Icons.user}</div>
-          <div class="profile-name" id="profile-display-name">${user.name}</div>
+          <div class="profile-name" id="profile-display-name">${escapeHtml(user.name)}</div>
           <div style="font-size:var(--font-size-sm);color:var(--color-text-secondary);margin-top:4px">
             ${totalWorkouts} entrenamientos · ${HomeScreen.formatVolume(totalVolume, user.units)} total
           </div>
@@ -183,7 +184,7 @@ export const ProfileScreen = {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               <span class="settings-item-label">Nombre</span>
             </div>
-            <span class="settings-item-value">${user.name}</span>
+            <span class="settings-item-value">${escapeHtml(user.name)}</span>
           </div>
           <div class="settings-item">
             <div class="settings-item-left">
@@ -278,7 +279,11 @@ export const ProfileScreen = {
               <span class="settings-item-label">Peso Corporal</span>
             </div>
             <span class="settings-item-value" id="profile-body-weight">
-              ${user.bodyWeight && user.bodyWeight.length ? user.bodyWeight[user.bodyWeight.length-1].weight + 'kg' : '-'}
+              ${(() => {
+                const hasWeight = user.bodyWeight && user.bodyWeight.length;
+                const stale = Calories.isWeightStale(user);
+                return `${hasWeight ? user.bodyWeight[user.bodyWeight.length-1].weight + 'kg' : '-'}${stale ? ' <span title="Peso sin actualizar desde hace más de 2 semanas — las calorías estimadas usan 70kg por defecto. ¡Registra tu peso actual!" style="color:var(--color-warning);font-size:0.7rem">⚠️</span>' : ''}`;
+              })()}
             </span>
           </div>
           <div class="settings-item" onclick="ProfileScreen.showBodyMeasurements()">
@@ -363,7 +368,7 @@ export const ProfileScreen = {
     Modal.show(`
       <div class="input-group" style="margin-bottom:16px">
         <label class="input-label">Tu Nombre</label>
-        <input class="input" id="edit-name-input" value="${Storage.getUser().name}" placeholder="Nombre">
+        <input class="input" id="edit-name-input" value="${escapeHtml(Storage.getUser().name)}" placeholder="Nombre">
       </div>
       <div style="display:flex;gap:12px">
         <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>

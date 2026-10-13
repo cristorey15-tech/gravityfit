@@ -3,7 +3,8 @@
 // ============================================
 
 import { Storage } from './storage.js';
-import { BadgeCelebration } from './components.js';
+import { Calories } from './calories.js';
+import { BadgeCelebration, Toast, Modal } from './components.js';
 
 export const Gamification = {
   // Configuración de Experiencia (XP)
@@ -186,7 +187,7 @@ export const Gamification = {
         case 'uniqueExercises':
           if ((user.stats.usedExercises || []).length >= badge.reqTarget) unlocked = true;
           break;
-        case 'yearActive':
+        case 'yearActive': {
           // Check if user has been active for N+ consecutive months
           const months = (user.stats.activeMonths || []).sort();
           if (months.length >= badge.reqTarget) {
@@ -200,6 +201,7 @@ export const Gamification = {
             }
           }
           break;
+        }
       }
 
       if (unlocked) {
@@ -253,7 +255,7 @@ export const Gamification = {
       descFn: (t) => `Entrena ${t} veces antes de las 8 AM` },
     { type: 'calories', target: [300, 600, 1000], icon: '🔥',
       titleFn: (t) => `${t} cal`,
-      descFn: (t) => `Quema ${t} calorías esta semana (con sensor HR)` },
+      descFn: (t) => `Quema ${t} calorías esta semana` },
     { type: 'program_days', target: [2, 3, 5], icon: '📅',
       titleFn: (t) => `${t} del Prog.`,
       descFn: (t) => `Completa ${t} días de tu programa activo` },
@@ -264,9 +266,12 @@ export const Gamification = {
     const now = new Date();
     const day = now.getDay();
     const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
-    const monday = new Date(now.setDate(diff));
+    // Build the date in LOCAL time. toISOString() converts to UTC, which
+    // rolls the local Monday back to Sunday for users east of UTC (Spain,
+    // Central Europe...) and resets weekly challenges a day late.
+    const monday = new Date(now.getFullYear(), now.getMonth(), diff);
     monday.setHours(0, 0, 0, 0);
-    return monday.toISOString().split('T')[0];
+    return Storage._localDateStr(monday);
   },
 
   ensureWeeklyChallenges() {
@@ -290,12 +295,8 @@ export const Gamification = {
     const activeProgram = Storage.getActiveProgram();
     let pool = [...this.CHALLENGE_POOL];
     
-    // Filtrar retos que requieren datos que el usuario no tiene
-    const allWorkouts = Storage.getWorkouts();
-    const hasHRData = allWorkouts.some(w => w.heartRateData?.totalCalories > 0);
-    if (!hasHRData) {
-      pool = pool.filter(c => c.type !== 'calories');
-    }
+    // Nota: el reto de calorías ya no requiere sensor HR — se estima con
+    // MET (cardio) y duración (fuerza) vía js/calories.js.
     
     // Dar más peso a retos de programa si hay uno activo
     if (activeProgram) {
@@ -382,8 +383,8 @@ export const Gamification = {
       return h < 8;
     }).length;
     
-    // Calories from heart rate
-    const weekCalories = weekWorkouts.reduce((s, w) => s + (w.heartRateData?.totalCalories || 0), 0);
+    // Calories: stored estimate (HR data wins inside getWorkoutCalories)
+    const weekCalories = Calories.getTotalCalories(weekWorkouts, user);
     
     // Program days
     const activeProgram = Storage.getActiveProgram();

@@ -3,9 +3,10 @@
 // ============================================
 
 import { Storage } from '../storage.js';
-import { Icons, Modal, Toast, RestTimer, PRCelebration } from '../components.js';
+import { Icons, Modal, Toast, RestTimer, PRCelebration, escapeHtml } from '../components.js';
 import { App } from '../app.js';
 import { HomeScreen } from './home.js';
+import { Calories } from '../calories.js';
 import { Logger } from '../../src/Logger.js';
 
 export const WorkoutScreen = {
@@ -51,12 +52,15 @@ export const WorkoutScreen = {
               <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.completeAMRAPRound()" style="font-size:1rem;background:var(--color-accent-dim);color:var(--color-accent);padding:4px 8px;border-radius:12px">+1 Ronda</button>
             </div>
           ` : `
-          <div class="workout-timer-display" id="workout-elapsed">${this.formatTime(elapsed)}</div>`}
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="workout-timer-display" id="workout-elapsed">${this.formatTime(elapsed)}</div>
+            <span id="workout-cal-estimate" style="font-size:0.7rem;color:var(--color-warning);font-weight:600;white-space:nowrap">~${Calories.estimateLive(this.activeWorkout, elapsed, Storage.getUser()).kcal} cal</span>
+          </div>`}
         </div>
         <button class="btn btn-primary btn-sm" onclick="WorkoutScreen.finishWorkout()">Finalizar</button>
       </div>
       <div class="screen-content" style="padding-top:8px">
-        <input class="workout-title-input" value="${this.activeWorkout.name}" 
+        <input class="workout-title-input" value="${escapeHtml(this.activeWorkout.name)}" 
           placeholder="Nombre del entrenamiento" onchange="WorkoutScreen.activeWorkout.name=this.value;WorkoutScreen.save()">
         <div id="workout-exercises-list">
           ${this.renderExercises(user)}
@@ -80,11 +84,12 @@ export const WorkoutScreen = {
     this.activeWorkout.exercises.forEach((ex, exIdx) => {
       const exData = Storage.getExercise(ex.exerciseId);
       const prev = Storage.getPreviousPerformance(ex.exerciseId);
-      const name = exData ? exData.name : ex.exerciseId;
+      const name = escapeHtml(exData ? exData.name : ex.exerciseId);
       const muscle = exData ? exData.primaryMuscle : '';
       const gifUrl = exData ? exData.gifUrl : null;
       const icon = exData ? exData.icon : '🏋️';
       const exUnit = ex.unit || user.units;
+      const isCardio = exData ? exData.type === 'cardio' : false;
       
       const isFirstInSuperset = ex.supersetId && currentSupersetId !== ex.supersetId;
       const isLastInSuperset = ex.supersetId && (exIdx === this.activeWorkout.exercises.length - 1 || this.activeWorkout.exercises[exIdx + 1].supersetId !== ex.supersetId);
@@ -126,12 +131,13 @@ export const WorkoutScreen = {
             <div style="display:flex;align-items:center;gap:3px;flex-shrink:0">
               ${exIdx > 0 ? `<button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.moveExercise(${exIdx},-1)" title="Mover arriba" style="font-size:0.9rem;opacity:0.5;padding:2px">▲</button>` : ''}
               ${exIdx < this.activeWorkout.exercises.length - 1 ? `<button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.moveExercise(${exIdx},1)" title="Mover abajo" style="font-size:0.9rem;opacity:0.5;padding:2px">▼</button>` : ''}
+              ${!isCardio ? `
               <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.toggleTimeMode(${exIdx})" title="${ex.timeMode ? 'Modo Reps' : 'Modo Tiempo'}" style="font-size:1rem;opacity:${ex.timeMode ? '1;color:var(--color-accent)' : '0.5'};padding:2px">⏱</button>
               <div class="unit-toggle-inline">
                 <span class="unit-opt ${exUnit === 'kg' ? 'active' : ''}" onclick="WorkoutScreen.setExUnit(${exIdx},'kg')">KG</span>
                 <span class="unit-opt ${exUnit === 'lbs' ? 'active' : ''}" onclick="WorkoutScreen.setExUnit(${exIdx},'lbs')">LBS</span>
               </div>
-              <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.showPlatesModal(${exIdx})" title="Calculadora de discos" style="font-size:1rem;opacity:0.6;padding:2px">🧮</button>
+              <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.showPlatesModal(${exIdx})" title="Calculadora de discos" style="font-size:1rem;opacity:0.6;padding:2px">🧮</button>` : ''}
               <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.replaceExercise(${exIdx})" title="Reemplazar" style="padding:2px;opacity:0.6">🔄</button>
               <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.removeExercise(${exIdx})" title="Eliminar" style="padding:2px">🗑️</button>
             </div>
@@ -157,14 +163,23 @@ export const WorkoutScreen = {
               </div>
             </div>`;
           })()}
+          ${isCardio ? `
+          <div class="set-labels">
+            <span style="width:28px;text-align:center">BLOQUE</span>
+            <span style="flex:1;text-align:center">MINUTOS</span>
+            <span style="flex:1;text-align:center">DIST. (KM)</span>
+            <span style="width:36px"></span>
+          </div>` : `
           <div class="set-labels">
             <span style="width:28px;text-align:center">SET</span>
             <span style="width:50px;text-align:center">ANT.</span>
             <span style="flex:1;text-align:center">${exUnit.toUpperCase()}</span>
             <span style="flex:1;text-align:center">${ex.timeMode ? 'SEG' : 'REPS'}</span>
             <span style="width:36px"></span>
-          </div>
-          ${ex.sets.map((set, setIdx) => this.renderSetRow(exIdx, setIdx, set, prev, exUnit, ex.timeMode)).join('')}
+          </div>`}
+          ${ex.sets.map((set, setIdx) => isCardio
+            ? this.renderCardioSetRow(exIdx, setIdx, set, exData.hasDistance)
+            : this.renderSetRow(exIdx, setIdx, set, prev, exUnit, ex.timeMode)).join('')}
           <button class="btn btn-ghost btn-sm btn-block" style="margin-top:8px;color:var(--color-accent)" 
             onclick="WorkoutScreen.addSet(${exIdx})">+ Agregar Serie</button>
             
@@ -177,7 +192,7 @@ export const WorkoutScreen = {
                   ${[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map(v => `<option value="${v}" ${ex.rpe == v ? 'selected' : ''}>${v}</option>`).join('')}
                 </select>
               </div>
-              <textarea class="input" style="width:100%;height:60px;font-size:0.875rem" placeholder="Añadir notas..." onchange="WorkoutScreen.updateExData(${exIdx}, 'notes', this.value)">${ex.notes || ''}</textarea>
+              <textarea class="input" style="width:100%;height:60px;font-size:0.875rem" placeholder="Añadir notas..." onchange="WorkoutScreen.updateExData(${exIdx}, 'notes', this.value)">${escapeHtml(ex.notes || '')}</textarea>
             </div>
           ` : `
             <button class="btn btn-ghost btn-sm btn-block" style="margin-top:4px;color:var(--color-text-secondary);font-size:0.75rem" 
@@ -221,6 +236,23 @@ export const WorkoutScreen = {
         <input type="number" class="input input-number" value="${set.weight || ''}" placeholder="0"
           onchange="WorkoutScreen.updateSet(${exIdx},${setIdx},'weight',this.value)" inputmode="decimal">
         ${repsCol}
+        <button class="${checkClass}" onclick="WorkoutScreen.toggleSet(${exIdx},${setIdx})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+      </div>`;
+  },
+
+  // Cardio block row: duration (min) + optional distance (km)
+  renderCardioSetRow(exIdx, setIdx, set, hasDistance) {
+    const checkClass = set.completed ? 'set-check completed' : 'set-check';
+    return `
+      <div class="set-row">
+        <span class="set-number">${setIdx + 1}</span>
+        <input type="number" class="input input-number" value="${set.duration || ''}" placeholder="30"
+          onchange="WorkoutScreen.updateSet(${exIdx},${setIdx},'duration',this.value)" inputmode="numeric">
+        ${hasDistance ? `
+        <input type="number" class="input input-number" value="${set.distance || ''}" placeholder="5.0" step="0.01"
+          onchange="WorkoutScreen.updateSet(${exIdx},${setIdx},'distance',this.value)" inputmode="decimal">` : '<span style="flex:1"></span>'}
         <button class="${checkClass}" onclick="WorkoutScreen.toggleSet(${exIdx},${setIdx})">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
         </button>
@@ -343,7 +375,7 @@ export const WorkoutScreen = {
     if (!exData || !exData.gifUrl) return;
     Modal.show(`
       <div style="text-align:center">
-        <img src="${exData.gifUrl}" alt="${exData.name}" class="exercise-gif-modal" style="margin-bottom:12px">
+        <img src="${exData.gifUrl}" alt="${escapeHtml(exData.name)}" class="exercise-gif-modal" style="margin-bottom:12px">
         <p style="color:var(--color-text-secondary);font-size:0.8125rem">${exData.primaryMuscle}${exData.secondaryMuscles?.length ? ' • ' + exData.secondaryMuscles.join(', ') : ''}</p>
       </div>
     `, { title: exData.name });
@@ -375,15 +407,25 @@ export const WorkoutScreen = {
     this.activeWorkout = {
       name: routine.name,
       routineId: routine.id,
-      exercises: routine.exercises.map(e => ({
-        exerciseId: e.exerciseId,
-        supersetId: e.supersetId || null,
-        timeMode: e.timeMode || false,
-        unit: user.units,
-        sets: Array.from({ length: e.sets || 3 }, () => ({
-          weight: null, reps: e.reps || null, type: 'normal', completed: false
-        }))
-      })),
+      exercises: routine.exercises.map(e => {
+        const exData = Storage.getExercise(e.exerciseId);
+        const isCardio = exData && exData.type === 'cardio';
+        return isCardio ? {
+          exerciseId: e.exerciseId,
+          supersetId: e.supersetId || null,
+          sets: Array.from({ length: e.sets || 1 }, () => ({
+            duration: e.reps || null, distance: null, type: 'normal', completed: false
+          }))
+        } : {
+          exerciseId: e.exerciseId,
+          supersetId: e.supersetId || null,
+          timeMode: e.timeMode || false,
+          unit: user.units,
+          sets: Array.from({ length: e.sets || 3 }, () => ({
+            weight: null, reps: e.reps || null, type: 'normal', completed: false
+          }))
+        };
+      }),
       startedAt: new Date().toISOString(),
     };
     this.startTime = Date.now();
@@ -492,7 +534,7 @@ export const WorkoutScreen = {
     let html = toRender.map(e => `
       <div class="exercise-list-item" onclick="WorkoutScreen.pickExercise('${e.id}')">
         ${e.gifUrl ? `<img src="${e.gifUrl}" alt="${e.name}" class="exercise-gif-thumb" loading="lazy" onerror="this.outerHTML='<div class=\\'exercise-gif-fallback\\'>${e.icon}</div>'">` : `<div class="exercise-gif-fallback">${e.icon}</div>`}
-        <div class="exercise-info"><h4>${e.name}</h4><p>${e.primaryMuscle}</p></div>
+        <div class="exercise-info"><h4>${escapeHtml(e.name)}</h4><p>${escapeHtml(e.primaryMuscle)}</p></div>
         <button class="btn btn-ghost btn-icon sm" onclick="event.stopPropagation(); Storage.toggleFavorite('${e.id}'); WorkoutScreen.updateExList()" style="font-size:1.2rem">
           ${favs.includes(e.id) ? '⭐' : '☆'}
         </button>
@@ -512,10 +554,20 @@ export const WorkoutScreen = {
     if (this._replaceTargetIdx !== undefined && this._replaceTargetIdx !== null) {
       // Replace mode: keep sets, change exercise
       const target = this.activeWorkout.exercises[this._replaceTargetIdx];
+      const wasCardio = target.sets.length > 0 && target.sets[0].duration !== undefined;
+      const picked = Storage.getExercise(exerciseId);
+      const isCardio = picked && picked.type === 'cardio';
       target.exerciseId = exerciseId;
       target.unit = user.units;
-      // Keep existing sets but reset completion
-      target.sets.forEach(s => s.completed = false);
+      if (isCardio !== wasCardio) {
+        // Shape changed: rebuild sets preserving count
+        target.sets = target.sets.map(() => isCardio
+          ? { duration: null, distance: null, type: 'normal', completed: false }
+          : { weight: null, reps: null, type: 'normal', completed: false });
+      } else {
+        // Keep existing sets but reset completion
+        target.sets.forEach(s => s.completed = false);
+      }
       delete target.timeMode;
       delete target.notes;
       delete target.rpe;
@@ -523,12 +575,17 @@ export const WorkoutScreen = {
       Toast.show('Ejercicio reemplazado');
     } else {
       // Normal mode: add new exercise
-      this.activeWorkout.exercises.push({
+      const picked = Storage.getExercise(exerciseId);
+      const isCardio = picked && picked.type === 'cardio';
+      this.activeWorkout.exercises.push(isCardio ? {
+        exerciseId,
+        sets: [{ duration: null, distance: null, type: 'normal', completed: false }]
+      } : {
         exerciseId,
         unit: user.units,
         sets: [{ weight: null, reps: null, type: 'normal', completed: false }]
       });
-      Toast.show('Ejercicio agregado');
+      Toast.show(isCardio ? 'Actividad de cardio agregada' : 'Ejercicio agregado');
     }
     this.save();
     Modal.hide();
@@ -612,12 +669,22 @@ export const WorkoutScreen = {
   },
 
   addSet(exIdx) {
-    const lastSet = this.activeWorkout.exercises[exIdx].sets.slice(-1)[0];
-    this.activeWorkout.exercises[exIdx].sets.push({
-      weight: lastSet ? lastSet.weight : null,
-      reps: lastSet ? lastSet.reps : null,
-      type: 'normal', completed: false
-    });
+    const ex = this.activeWorkout.exercises[exIdx];
+    const lastSet = ex.sets.slice(-1)[0];
+    const exData = Storage.getExercise(ex.exerciseId);
+    if (exData && exData.type === 'cardio') {
+      ex.sets.push({
+        duration: lastSet ? lastSet.duration : null,
+        distance: lastSet ? lastSet.distance : null,
+        type: 'normal', completed: false
+      });
+    } else {
+      ex.sets.push({
+        weight: lastSet ? lastSet.weight : null,
+        reps: lastSet ? lastSet.reps : null,
+        type: 'normal', completed: false
+      });
+    }
     this.save();
     this.render();
     if (navigator.vibrate) navigator.vibrate(15);
@@ -634,16 +701,19 @@ export const WorkoutScreen = {
     set.completed = !set.completed;
     
     // Haptic feedback
-    if (navigator.vibrate) navigator.vibrate(10);
-
-    // Smart Autocomplete: si completamos la serie y la siguiente está vacía, copiar valores
-    if (set.completed) {
-      const ex = this.activeWorkout.exercises[exIdx];
-      const nextSet = ex.sets[setIdx + 1];
-      if (nextSet && !nextSet.completed && !nextSet.weight && !nextSet.reps) {
-        nextSet.weight = set.weight;
-        nextSet.reps = set.reps;
-      }
+    if (navigator.vibrate) navigator.vibrate(10);      // Smart Autocomplete: si completamos la serie y la siguiente está vacía, copiar valores
+      if (set.completed) {
+        const ex = this.activeWorkout.exercises[exIdx];
+        const nextSet = ex.sets[setIdx + 1];
+        if (nextSet && !nextSet.completed && !nextSet.weight && !nextSet.reps && !nextSet.duration) {
+          if (set.duration !== undefined) {
+            nextSet.duration = set.duration;
+            nextSet.distance = set.distance;
+          } else {
+            nextSet.weight = set.weight;
+            nextSet.reps = set.reps;
+          }
+        }
 
       // Per-exercise timer: record startTime on first completed set
       const isFirstCompleted = !ex.startTime;
@@ -1071,6 +1141,8 @@ export const WorkoutScreen = {
       totalVolume: Storage.getTotalVolume(this.activeWorkout),
       heartRateData: hrSummary,
       intensityScore: this.calcIntensityScore(this.activeWorkout, duration),
+      calories: Calories.getWorkoutCalories({ ...this.activeWorkout, duration, heartRateData: hrSummary }, Storage.getUser()),
+      steps: Calories.getWorkoutSteps(this.activeWorkout),
       notes: this._workoutNote || ''
     };
     this._workoutNote = '';
@@ -1218,7 +1290,7 @@ export const WorkoutScreen = {
     const exercises = workout.exercises.map(ex => ({
       exerciseId: ex.exerciseId,
       sets: ex.sets.length,
-      reps: ex.sets[0]?.reps || 10,
+      reps: ex.sets[0]?.reps || ex.sets[0]?.duration || 10,
       restSeconds: 90
     }));
     Storage.updateRoutine(routineId, { exercises });
@@ -1232,8 +1304,8 @@ export const WorkoutScreen = {
       <div id="share-card-content" style="background:var(--color-surface);padding:24px;border-radius:16px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);margin-bottom:16px;position:relative;overflow:hidden">
         <div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg, var(--color-accent), #fff)"></div>
         <div style="font-size:3rem;margin-bottom:8px">🔥</div>
-        <h3 style="margin-bottom:4px;font-size:1.5rem">${w.name || 'Entrenamiento'}</h3>
-        <p style="color:var(--color-text-secondary);font-size:0.875rem;margin-bottom:20px">${user.name} • GravityFit</p>
+        <h3 style="margin-bottom:4px;font-size:1.5rem">${escapeHtml(w.name || 'Entrenamiento')}</h3>
+        <p style="color:var(--color-text-secondary);font-size:0.875rem;margin-bottom:20px">${escapeHtml(user.name)} • GravityFit</p>
         
         <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
           <div style="background:var(--color-surface-hover);padding:10px 12px;border-radius:12px;flex:1;text-align:center">
@@ -1248,7 +1320,19 @@ export const WorkoutScreen = {
             <div style="font-size:1.1rem;font-weight:bold;color:${w.intensityScore >= 70 ? 'var(--color-accent)' : w.intensityScore >= 40 ? 'var(--color-warning)' : 'var(--color-text-secondary)'}">${w.intensityScore}</div>
             <div style="font-size:0.65rem;color:var(--color-text-secondary);margin-top:2px">INTENSIDAD</div>
           </div>` : ''}
+          ${w.calories ? `<div style="background:var(--color-surface-hover);padding:10px 12px;border-radius:12px;flex:1;text-align:center">
+            <div style="font-size:1.1rem;font-weight:bold;color:var(--color-warning)">${w.calories.source === 'hr' ? '' : '~'}${w.calories.kcal}</div>
+            <div style="font-size:0.65rem;color:var(--color-text-secondary);margin-top:2px">CAL</div>
+          </div>` : ''}
         </div>
+        
+        ${w.steps > 0 ? `
+        <div style="display:flex;justify-content:center;margin-bottom:20px">
+          <div style="background:var(--color-surface-hover);padding:10px 20px;border-radius:12px;text-align:center">
+            <div style="font-size:1.1rem;font-weight:bold;color:var(--color-info)">👣 ${w.steps.toLocaleString('es-ES')}</div>
+            <div style="font-size:0.65rem;color:var(--color-text-secondary);margin-top:2px">PASOS (ESTIMADOS)</div>
+          </div>
+        </div>` : ''}
         
         ${w.heartRateData ? `
         <div style="display:flex;gap:12px;justify-content:center;margin-bottom:20px">
@@ -1285,7 +1369,7 @@ export const WorkoutScreen = {
         <button class="btn btn-primary flex-1" onclick="WorkoutScreen.shareWorkout()">Compartir 📸</button>
       </div>
       <div style="margin-top:12px">
-        <textarea class="input" style="width:100%;height:60px;font-size:0.8125rem" placeholder="📝 Nota del entrenamiento (opcional)" id="workout-end-note">${w.notes || ''}</textarea>
+        <textarea class="input" style="width:100%;height:60px;font-size:0.8125rem" placeholder="📝 Nota del entrenamiento (opcional)" id="workout-end-note">${escapeHtml(w.notes || '')}</textarea>
         <button class="btn btn-primary btn-block" style="margin-top:8px" onclick="WorkoutScreen.saveWorkoutNote('${w.id}')">💾 Guardar Nota</button>
       </div>
     `;
@@ -1393,6 +1477,12 @@ export const WorkoutScreen = {
     this.workoutTimer = setInterval(() => {
       const el = document.getElementById('workout-elapsed');
       if (el) el.textContent = this.formatTime(this.getElapsed());
+      // Live calorie estimate (HR sensor data overrides via BLE display)
+      const calEl = document.getElementById('workout-cal-estimate');
+      if (calEl && this.activeWorkout) {
+        const est = Calories.estimateLive(this.activeWorkout, this.getElapsed(), Storage.getUser());
+        calEl.textContent = `~${est.kcal} cal`;
+      }
     }, 1000);
   },
   stopTimer() {

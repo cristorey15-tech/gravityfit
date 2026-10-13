@@ -10,7 +10,6 @@ import '../css/screens.css';
 // Import services
 import { Logger, initGlobalErrorHandler } from './Logger.js';
 import { themeManager } from './ThemeManager.js';
-import { animatedTransition } from './AnimatedTransition.js';
 
 // Import core modules (which attach exports to window)
 import { Storage } from '../js/storage.js';
@@ -59,7 +58,6 @@ window.CompetitionNotifications = CompetitionNotifications;
 window.App = App;
 window.Logger = Logger;
 window.themeManager = themeManager;
-window.animatedTransition = animatedTransition;
 
 // MUSCLE_GROUPS and DEFAULT_EXERCISES are imported from exercise-data.js module
 

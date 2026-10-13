@@ -11,6 +11,8 @@ import { HistoryScreen } from './screens/history.js';
 import { ExercisesScreen } from './screens/exercises.js';
 import { ProfileScreen } from './screens/profile.js';
 import { CompetitionScreen } from './screens/competition.js';
+import { CompetitionNotifications } from './competition-notifications.js';
+import { CloudSync } from './sync.js';
 
 export const App = {
   deferredPrompt: null,

@@ -5,6 +5,19 @@
 import { Storage } from './storage.js';
 import { Logger } from '../src/Logger.js';
 
+// --- HTML Escaping (XSS guard) ---
+// Every user-entered or third-party string (names, notes, exercise names)
+// MUST go through this before being interpolated into an innerHTML template.
+export function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // --- SVG Icons (Lucide) ---
 export const Icons = {
   user: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
@@ -37,10 +50,19 @@ export const Toast = {
   },
   show(message, type = 'success', duration = 3000) {
     const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
+    // Resolve the container lazily: Toast.show can be called before init()
+    // (e.g. by the gamification engine during startup flows)
+    const container = this.container || document.getElementById('toast-container');
+    if (!container) {
+      Logger.warn('Toast.show called without a toast container — message dropped:', message);
+      return;
+    }
+    this.container = container;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span class="toast-icon">${icons[type] || ''}</span><span>${message}</span>`;
-    this.container.appendChild(toast);
+    // Toasts interpolate dynamic values (names, errors) — never allow raw HTML
+    toast.innerHTML = `<span class="toast-icon">${icons[type] || ''}</span><span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
       toast.style.transform = 'translateY(-10px)';
@@ -58,7 +80,7 @@ export const Modal = {
     overlay.className = 'modal-overlay active' + (options.center ? ' modal-center' : '');
     container.innerHTML = `
       <div class="modal-handle"></div>
-      ${options.title ? `<h3 class="modal-title">${options.title}</h3>` : ''}
+      ${options.title ? `<h3 class="modal-title">${escapeHtml(options.title)}</h3>` : ''}
       <div class="modal-body">${content}</div>
     `;
     overlay.onclick = (e) => { if (e.target === overlay) Modal.hide(); };
@@ -133,7 +155,7 @@ export const RestTimer = {
         <span style="font-size:0.65rem;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">Siguiente</span>
         <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
           <span style="font-size:1.1rem">▶</span>
-          <span style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${nextEx.name}</span>
+          <span style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escapeHtml(nextEx.name)}</span>
           <span style="font-size:0.65rem;color:var(--color-text-tertiary)">${nextEx.index}/${nextEx.total}</span>
         </div>
       </div>` : '';
@@ -382,7 +404,7 @@ export const Onboarding = {
       <div class="onboarding-logo">💪</div>
       <div class="onboarding-title">Tu Perfil</div>
       <div class="onboarding-subtitle">¿Cómo te llamas y qué unidades prefieres?</div>
-      <input class="onboarding-input" id="onb-name" placeholder="Tu nombre" value="${this.data.name}" 
+      <input class="onboarding-input" id="onb-name" placeholder="Tu nombre" value="${escapeHtml(this.data.name)}" 
         oninput="Onboarding.data.name=this.value" autocomplete="off">
       <div class="onboarding-units">
         <div class="onboarding-unit-btn ${this.data.units === 'kg' ? 'active' : ''}" onclick="Onboarding.setUnit('kg')">
@@ -517,7 +539,7 @@ export const PRCelebration = {
         <div class="pr-badge-icon">🏆</div>
         <div class="pr-badge-title">¡NUEVO PR!</div>
         <div class="pr-badge-detail">${weight}${unit} × ${reps}</div>
-        <div class="pr-badge-exercise">${exerciseName}</div>
+        <div class="pr-badge-exercise">${escapeHtml(exerciseName)}</div>
       </div>
     `;
     this.el.classList.add('active');
