@@ -178,17 +178,24 @@ export const AICoach = {
 
   _buildWorkoutFromTemplate(name, templateExercises) {
     const user = Storage.getUser();
+    const TARGET_RPE = 8;
     const generatedExercises = templateExercises.map(ex => {
       const e1RM = this.estimate1RM(ex.exerciseId);
+      // RPE autoregulation: when the user logs RPE, base the working weight on
+      // what they actually hit at the target RPE, not a blind % of 1RM.
+      const rpeWeight = this.getSuggestedWeightFromRPE(ex.exerciseId, TARGET_RPE);
       const sets = [];
-      
-      if (e1RM > 0) {
-        // Inteligencia de programación si hay 1RM
-        // Set 1: Calentamiento 50%
+
+      if (rpeWeight) {
+        const working = this._roundToPlates(rpeWeight);
+        sets.push({ weight: this._roundToPlates(working * 0.7), reps: 10, type: 'warmup', completed: false });
+        sets.push({ weight: working, reps: 8, type: 'normal', completed: false });
+        sets.push({ weight: working, reps: 8, type: 'normal', completed: false });
+        sets.push({ weight: working, reps: 8, type: 'normal', completed: false });
+      } else if (e1RM > 0) {
+        // Fallback: inteligencia de programación por % de 1RM
         sets.push({ weight: this._roundToPlates(e1RM * 0.5), reps: 10, type: 'warmup', completed: false });
-        // Set 2: Aproximación 70%
         sets.push({ weight: this._roundToPlates(e1RM * 0.7), reps: 8, type: 'normal', completed: false });
-        // Set 3 y 4: Trabajo efectivo 80%
         sets.push({ weight: this._roundToPlates(e1RM * 0.8), reps: 6, type: 'normal', completed: false });
         sets.push({ weight: this._roundToPlates(e1RM * 0.8), reps: 6, type: 'normal', completed: false });
       } else {
@@ -293,20 +300,139 @@ export const AICoach = {
 
   getSuggestedWeightFromRPE(exerciseId, targetRPE) {
     const history = Storage.getExerciseHistory(exerciseId, 10);
-    if (history.length === 0) return null;
-    // Find sessions where RPE was recorded
-    const withRPE = [];
-    for (const h of history) {
-      for (const s of h.sets) {
-        if (s.rpe && s.weight) {
-          withRPE.push({ weight: s.weight, reps: s.reps, rpe: s.rpe });
+    const candidates = [];
+    for (let i = 0; i < history.length; i++) {
+      for (const s of history[i].sets) {
+        const rpe = Number(s.rpe);
+        if (rpe > 0 && s.weight) {
+          candidates.push({ weight: s.weight, rpe, recency: i });
         }
       }
     }
-    if (withRPE.length === 0) return null;
-    // Find closest RPE match and suggest that weight
-    withRPE.sort((a, b) => Math.abs(a.rpe - targetRPE) - Math.abs(b.rpe - targetRPE));
-    return withRPE[0].weight;
+    if (candidates.length === 0) return null;
+    // Prefer sets near the target RPE; break ties toward heavier and more recent.
+    candidates.sort((a, b) => {
+      const da = Math.abs(a.rpe - targetRPE);
+      const db = Math.abs(b.rpe - targetRPE);
+      if (da !== db) return da - db;
+      if (b.weight !== a.weight) return b.weight - a.weight;
+      return a.recency - b.recency;
+    });
+    return candidates[0].weight;
+  },
+
+  // RPE summary for an exercise from recent sessions that logged RPE.
+  // history[0] is the most recent session.
+  getRPEStats(exerciseId) {
+    const history = Storage.getExerciseHistory(exerciseId, 6);
+    const sessions = [];
+    for (const h of history) {
+      const rpes = (h.sets || []).map(s => Number(s.rpe)).filter(r => r > 0);
+      if (rpes.length) {
+        sessions.push({
+          date: h.date,
+          avgRPE: rpes.reduce((a, b) => a + b, 0) / rpes.length,
+          maxWeight: h.maxWeight || 0,
+        });
+      }
+    }
+    if (sessions.length === 0) return null;
+
+    // Most recent session is the current signal; compare against everything older.
+    const recentRPE = sessions[0].avgRPE;
+    const older = sessions.slice(1);
+    const olderRPE = older.length
+      ? older.reduce((s, x) => s + x.avgRPE, 0) / older.length
+      : recentRPE;
+
+    const recentW = sessions[0].maxWeight;
+    const olderW = older.length ? Math.max(...older.map(x => x.maxWeight)) : recentW;
+    const weightTrend = recentW > olderW * 1.02 ? 'improving'
+      : recentW < olderW * 0.98 ? 'declining' : 'stable';
+
+    return { count: sessions.length, recentRPE, olderRPE, weightTrend, lastWeight: recentW };
+  },
+
+  // =============================================
+  // Proactive Coach — insights surfaced without the user asking
+  // =============================================
+  getCoachInsights() {
+    const insights = [];
+    const user = Storage.getUser();
+
+    // 1) RPE-based: overreaching vs available margin on recently-logged exercises
+    const recentWorkouts = Storage.getWorkouts().slice(0, 12);
+    const exIds = [];
+    recentWorkouts.forEach(w => (w.exercises || []).forEach(e => {
+      if (e.exerciseId && !exIds.includes(e.exerciseId)) exIds.push(e.exerciseId);
+    }));
+    let rpeInsights = 0;
+    for (const exId of exIds) {
+      if (rpeInsights >= 2) break;
+      const stats = this.getRPEStats(exId);
+      if (!stats || stats.count < 2) continue;
+      const exData = Storage.getExercise(exId);
+      const name = exData ? exData.name : 'un ejercicio';
+      const rpeStr = stats.recentRPE.toFixed(1);
+      if (stats.recentRPE >= 9 && stats.weightTrend === 'declining') {
+        insights.push({
+          icon: '⚠️', severity: 'warn', title: `Sobreesfuerzo en ${name}`,
+          detail: `RPE medio ${rpeStr} y tu peso máximo baja. Baja la carga ~5–10% esta semana.`,
+        });
+        rpeInsights++;
+      } else if (stats.recentRPE <= 7 && stats.weightTrend !== 'declining') {
+        insights.push({
+          icon: '📈', severity: 'good', title: `Margen en ${name}`,
+          detail: `Quedas en RPE ${rpeStr} — puedes subir carga o hacer una serie más.`,
+        });
+        rpeInsights++;
+      }
+    }
+
+    // 2) Fatigue-based
+    const fatigue = this.getMuscleFatigue();
+    const tired = Object.entries(fatigue).sort((a, b) => b[1] - a[1])[0];
+    if (tired && tired[1] >= 70) {
+      insights.push({
+        icon: '🛌', severity: 'warn', title: `${tired[0]} muy fatigado`,
+        detail: `${tired[1]}% de fatiga (últimas 72h). Hoy prioriza otro grupo o descansa ese músculo.`,
+      });
+    }
+
+    // 3) Deload
+    if (this.shouldDeload()) {
+      insights.push({
+        icon: '🧊', severity: 'alert', title: 'Hora de un deload',
+        detail: 'Varias semanas de volumen alto. Reduce carga/volumen ~40% esta semana para recuperar.',
+      });
+    }
+
+    // 4) Consistency / weekly goal
+    const weekWorkouts = (typeof Storage.getWorkoutsThisWeek === 'function') ? Storage.getWorkoutsThisWeek() : [];
+    const goal = user.weeklyGoal || 4;
+    const done = weekWorkouts.length;
+    if (done === 0) {
+      const last = Storage.getWorkouts()[0];
+      if (last && last.finishedAt) {
+        const days = Math.floor((Date.now() - new Date(last.finishedAt)) / 86400000);
+        if (days >= 3) {
+          insights.push({
+            icon: '⏰', severity: 'alert', title: `${days} días sin entrenar`,
+            detail: 'El músculo se mantiene, pero el hábito se enfría. Hoy toca moverse.',
+          });
+        }
+      }
+    } else if (done < goal) {
+      const missing = goal - done;
+      insights.push({
+        icon: '🎯', severity: 'info', title: `Meta semanal ${done}/${goal}`,
+        detail: `Te falta${missing > 1 ? 'n' : ''} ${missing} entreno${missing > 1 ? 's' : ''} para tu meta.`,
+      });
+    }
+
+    const order = { alert: 0, warn: 1, good: 2, info: 3 };
+    insights.sort((a, b) => (order[a.severity] ?? 4) - (order[b.severity] ?? 4));
+    return insights;
   },
 
   // Inyectar Rutina en la UI

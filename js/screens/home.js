@@ -102,6 +102,7 @@ export const HomeScreen = {
             <span style="font-size:1.2rem">🧠</span> AI Coach
           </button>
         </div>
+        ${this.renderCoachInsights()}
         ${this.renderCompetitionWidget()}
         ${this.renderQuickActions(routines)}
         
@@ -489,6 +490,37 @@ export const HomeScreen = {
         Modal.show(html, { title: `📊 ${monthName}` });
       }, 2000);
     }, 3000);
+  },
+
+  renderCoachInsights() {
+    if (typeof window.AICoach === 'undefined') return '';
+    let insights;
+    try { insights = window.AICoach.getCoachInsights(); } catch { return ''; }
+    if (!insights || !insights.length) return '';
+
+    const sevColor = {
+      alert: 'var(--color-danger)',
+      warn: 'var(--color-warning)',
+      good: 'var(--color-accent)',
+      info: 'var(--color-info)',
+    };
+    const rows = insights.slice(0, 2).map(ins => `
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0">
+        <span style="font-size:1.1rem;line-height:1.2">${ins.icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.8rem;font-weight:600;color:${sevColor[ins.severity] || 'var(--color-text)'}">${escapeHtml(ins.title)}</div>
+          <div style="font-size:0.72rem;color:var(--color-text-secondary);line-height:1.4">${escapeHtml(ins.detail)}</div>
+        </div>
+      </div>`).join('');
+
+    return `
+      <div class="coach-insights" style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:16px;padding:12px 16px;margin-bottom:16px">
+        <div class="home-section-title" style="margin-bottom:2px">
+          <span>🧠 Coach IA</span>
+          <span style="font-size:0.6rem;color:var(--color-text-tertiary)">según tu RPE y fatiga</span>
+        </div>
+        ${rows}
+      </div>`;
   },
 
   renderFatigueWidget() {
