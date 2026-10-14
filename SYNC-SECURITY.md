@@ -25,6 +25,9 @@ La versión anterior del sync era insegura:
 - **Auth anónimo opcional** — se intenta `signInAnonymously()`; si está habilitado,
   las reglas pueden exigir `auth != null`. Si no, el sync sigue funcionando por
   código (nunca lanza error).
+- **compId de competición seguro** — los nuevos usan `comp_` + 128 bits aleatorios
+  en lugar de `comp_<timestamp>` (que era enumerable). Las reglas ahora también
+  cubren `competitions/*`.
 
 ## Lo que DEBES hacer tú (no se puede desde el código)
 
@@ -55,9 +58,26 @@ fuerte es **por usuario**: guardar en `users/$uid` y usar reglas
 `"$uid": { ".read": "auth != null && auth.uid === $uid", ".write": "... " }`.
 Eso exige cuentas reales (email/Google) y **elimina el enlace por código** (cada
 dispositivo tendría su propio `auth.uid`). Es la opción correcta si quieres
-aislamiento real por cuenta; cambia la UX de sincronización.
+aislamiento real por cuenta; cambia la UX de sincronización.## Modelo de competiciones
 
-## Modelo de competiciones
+Los datos de competiciones (`competitions/<compId>/dailyStats/...`) contienen
+nombre + volumen/racha diarios de cada miembro. Antes el `compId` era
+`comp_<timestamp>` (enumerable) y las reglas no lo cubrían: cualquiera podía
+leer o escribir en una competición adivinando el ID.
 
-Los datos de competiciones/leaderboards viven en un nodo distinto y son
-deliberadamente compartidos, por lo que estas reglas (`users/*`) **no** los tocan.
+Se corrigió:
+- Los `compId` **nuevos** son aleatorios e inadivinables.
+- `database.rules.json` ahora exige `auth != null` también en `competitions/*`.
+
+> **Aviso**: las competiciones **creadas antes** de este cambio conservan su ID
+> `comp_<timestamp>` enumerable (migrarlas rompería el enlace con los miembros que
+> ya tienen ese ID). Son de severidad baja (solo agregados de entrenamiento diario).
+> Si quieres cerrarlas, recrea la competición con el código nuevo.
+
+### Bug funcional detectado (no es de seguridad)
+
+`Storage.joinCompetition(code)` descarta el `id` del código y genera un ID nuevo
+en el dispositivo que se une, así que dos miembros pueden terminar con IDs de
+competición distintos y sus dailyStats no se agregan en la misma ruta de Firebase.
+Es un bug de funcionalidad preexistente, aparte de la seguridad — ¿quieres que lo
+arregle?

@@ -24,6 +24,24 @@ describe('Storage', () => {
     });
   });
 
+  describe('secureId (crypto-strong)', () => {
+    it('produces a 32-char hex id', () => {
+      expect(Storage.secureId()).toMatch(/^[0-9a-f]{32}$/);
+    });
+
+    it('is unique across many calls', () => {
+      const ids = new Set(Array.from({ length: 100 }, () => Storage.secureId()));
+      expect(ids.size).toBe(100);
+    });
+
+    it('addCompetition uses a strong comp id, not an enumerable timestamp', () => {
+      const comp = Storage.addCompetition({ name: 'Reto' });
+      expect(comp.id).toMatch(/^comp_[0-9a-f]{32}$/);
+      // not the legacy 'comp_<numeric timestamp>' form
+      expect(comp.id).not.toMatch(/^comp_\d+$/);
+    });
+  });
+
   describe('User settings', () => {
     it('should return default user when no user stored', () => {
       const user = Storage.getUser();

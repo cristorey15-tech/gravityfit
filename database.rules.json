@@ -3,6 +3,10 @@
     "users": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "competitions": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }

@@ -668,6 +668,17 @@ export const Storage = {
     return 'xxxx-xxxx-xxxx'.replace(/x/g, () => ((Math.random() * 16) | 0).toString(16));
   },
 
+  // Cryptographically strong 128-bit id (32 hex). Used for ids that leave the
+  // device (e.g. competition ids stored in Firebase) where an enumerable id
+  // would let strangers enumerate and read/write shared data. `uuid()` above is
+  // fine for local-only ids but uses Math.random().
+  secureId() {
+    const bytes = new Uint8Array(16);
+    const c = typeof crypto !== 'undefined' ? crypto : window.crypto;
+    c.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  },
+
   // =============================================
   // Export / Import
   // =============================================
@@ -1054,7 +1065,7 @@ export const Storage = {
   },
   addCompetition(comp) {
     const comps = this.getCompetitions();
-    comp.id = 'comp_' + Date.now();
+    comp.id = 'comp_' + this.secureId();
     comp.createdAt = new Date().toISOString();
     comp.members = comp.members || [];
     comp.dailyStats = {};
