@@ -34,8 +34,16 @@ export const CloudSync = {
   TOKEN_TTL_MS: 7 * 24 * 60 * 60 * 1000, // 7 days
 
   // Firebase genérico o por defecto (si proporcionas tus propias credenciales en el futuro, las pones aquí)
+  // Firebase web config. The apiKey is a public identifier (it ships in every
+  // web bundle); access is enforced by Security Rules + Auth, not by the key.
   defaultConfig: {
+    apiKey: 'AIzaSyBQzBjtroMoSkoTduRkw8Ec7sRkx3t5_GQ',
+    authDomain: 'gravityfit-ba2e9.firebaseapp.com',
     databaseURL: 'https://gravityfit-ba2e9-default-rtdb.europe-west1.firebasedatabase.app',
+    projectId: 'gravityfit-ba2e9',
+    storageBucket: 'gravityfit-ba2e9.firebasestorage.app',
+    messagingSenderId: '113339374330',
+    appId: '1:113339374330:web:bafdce03508bcfbf03c743',
   },
 
   // ---- ID + token helpers (pure, unit-testable) ----
