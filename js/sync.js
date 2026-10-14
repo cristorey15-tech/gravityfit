@@ -92,6 +92,43 @@ export const CloudSync = {
     return tokenData;
   },
 
+  // Expiry (ms epoch) of a given sync code, or null if invalid.
+  tokenExpiry(tokenBase64) {
+    try {
+      return this.parseToken(tokenBase64).exp || null;
+    } catch {
+      return null;
+    }
+  },
+
+  // Return a STABLE sync code with a real expiry so a countdown is meaningful.
+  // Reuses the last issued code while it's still valid; only mints a new one on
+  // first use, after expiry, or when force=true ("Regenerar").
+  getSyncCode(force = false) {
+    const user = Storage.getUser();
+    const issued = user.syncToken;
+    if (!force && issued && issued.code && issued.exp && Date.now() < issued.exp) {
+      return { code: issued.code, exp: issued.exp };
+    }
+    const code = this.getSyncToken();
+    const exp = this.tokenExpiry(code);
+    user.syncToken = { code, exp };
+    Storage.saveUser(user);
+    return { code, exp };
+  },
+
+  // Snapshot of sync state for the settings panel.
+  getStatus() {
+    const user = Storage.getUser();
+    return {
+      connected: !!this.db,
+      authed: !!(this.auth && this.auth.currentUser),
+      cloudId: user.cloudId || null,
+      idIsWeak: this._isWeakId(user.cloudId),
+      lastSync: user.lastSync || null,
+    };
+  },
+
   // True if local storage already holds meaningful data (used by the overwrite guard).
   _hasLocalData() {
     try {

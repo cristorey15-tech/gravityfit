@@ -1268,33 +1268,98 @@ export const ProfileScreen = {
     }
   },
 
-  showCloudSyncModal() {
-    const user = Storage.getUser();
-    const token = window.CloudSync.getSyncToken();
-    
+  async showCloudSyncModal() {
+    // Capture legacy-ID state BEFORE init (init migrates weak ids to secure ones)
+    const wasWeak = window.CloudSync._isWeakId(Storage.getUser().cloudId);
+    // Ensure Firebase/auth state is accurate for the status display
+    try { await window.CloudSync.init(); } catch { /* offline / unavailable */ }
+    const status = window.CloudSync.getStatus();
+    const { code, exp } = window.CloudSync.getSyncCode();
+
+    // Status line
+    let sIcon, sText, sColor;
+    if (status.connected && status.authed) {
+      sIcon = '🟢'; sText = 'Conectado (anónimo)'; sColor = 'var(--color-accent)';
+    } else if (status.connected) {
+      sIcon = '🟡'; sText = 'Conectado, pero sin auth — las reglas bloquearán'; sColor = 'var(--color-warning)';
+    } else {
+      sIcon = '🔴'; sText = 'Sin conexión'; sColor = 'var(--color-danger)';
+    }
+
+    const idLine = wasWeak
+      ? '🔄 ID antiguo migrado a uno seguro'
+      : '🔒 ID seguro (128-bit, inadivinable)';
+    const maskedId = status.cloudId
+      ? status.cloudId.slice(0, 6) + '…' + status.cloudId.slice(-4)
+      : '—';
+    const lastSync = status.lastSync
+      ? new Date(status.lastSync).toLocaleString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'Nunca';
+
+    // Reset any prior countdown timer
+    if (this._syncCountdownTimer) { clearInterval(this._syncCountdownTimer); this._syncCountdownTimer = null; }
+
     Modal.show(`
       <div style="text-align:center;margin-bottom:16px">
         <div style="font-size:3rem;margin-bottom:8px">☁️</div>
-        <h3 style="font-size:1.25rem;font-weight:bold;margin-bottom:8px">Sincronización en la Nube</h3>
-        <p style="font-size:0.875rem;color:var(--color-text-secondary)">
-          Tus datos se guardan y unifican de forma segura a través de un código secreto.
-        </p>
+        <h3 style="font-size:1.25rem;font-weight:bold;margin-bottom:4px">Sincronización en la Nube</h3>
+        <p style="font-size:0.8rem;color:var(--color-text-secondary)">Tus datos viajan protegidos detrás de un código secreto que caduca.</p>
       </div>
 
-      <div style="background:var(--color-bg-input);padding:16px;border-radius:8px;margin-bottom:16px;text-align:center">
-        <div style="font-size:0.75rem;color:var(--color-text-secondary);margin-bottom:8px">TU CÓDIGO DE ENLACE ACTUAL</div>
-        <textarea readonly style="width:100%;height:60px;background:var(--color-bg);border:1px solid var(--color-border);color:var(--color-text);font-family:monospace;font-size:0.75rem;padding:8px;border-radius:4px;resize:none" onclick="this.select()">${token}</textarea>
-        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="navigator.clipboard.writeText('${token}'); Toast.show('Código copiado', 'success')">Copiar Código</button>
+      <div style="background:var(--color-bg-input);border:1px solid var(--color-border);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:1rem">${sIcon}</span>
+          <span style="font-size:0.85rem;font-weight:600;color:${sColor}">${sText}</span>
+        </div>
+        <div style="font-size:0.7rem;color:var(--color-text-secondary);line-height:1.8">
+          <div>${idLine}</div>
+          <div style="font-family:monospace;opacity:0.8">ID: ${maskedId}</div>
+          <div>Último respaldo: ${lastSync}</div>
+        </div>
       </div>
 
-      <div style="margin-bottom:16px">
-        <div style="font-size:0.875rem;font-weight:bold;margin-bottom:8px">Importar desde otro Dispositivo</div>
+      <div style="background:var(--color-bg-input);padding:14px;border-radius:10px;margin-bottom:14px;text-align:center">
+        <div style="font-size:0.7rem;color:var(--color-text-secondary);margin-bottom:6px">TU CÓDIGO DE ENLACE</div>
+        <textarea readonly style="width:100%;height:56px;background:var(--color-bg);border:1px solid var(--color-border);color:var(--color-text);font-family:monospace;font-size:0.7rem;padding:8px;border-radius:6px;resize:none" onclick="this.select()">${code}</textarea>
+        <div style="margin-top:8px;font-size:0.72rem;color:var(--color-text-secondary)">⏳ Vence en: <span id="sync-code-expiry" style="font-weight:600;color:var(--color-text)">${this._formatRemaining(exp - Date.now())}</span></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-secondary btn-sm" style="flex:1" onclick="navigator.clipboard.writeText('${code}'); Toast.show('Código copiado', 'success')">Copiar</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="ProfileScreen.regenerateSyncCode()">🔄 Regenerar</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <div style="font-size:0.85rem;font-weight:bold;margin-bottom:8px">Importar desde otro dispositivo</div>
         <input type="text" id="sync-token-input" class="input" placeholder="Pega el código de tu otro celular aquí..." style="width:100%">
         <button class="btn btn-outline btn-block" style="margin-top:8px" onclick="ProfileScreen.importCloudToken()">Importar y Sincronizar</button>
       </div>
 
       <button class="btn btn-primary btn-block" onclick="Modal.hide()">Cerrar</button>
     `, { title: 'Cloud Sync' });
+
+    // Live countdown (updates every 30s; self-clears when the modal closes)
+    this._syncCountdownTimer = setInterval(() => {
+      const el = document.getElementById('sync-code-expiry');
+      if (!el) { clearInterval(this._syncCountdownTimer); this._syncCountdownTimer = null; return; }
+      const left = exp - Date.now();
+      el.textContent = left > 0 ? this._formatRemaining(left) : 'Expirado';
+    }, 30000);
+  },
+
+  _formatRemaining(ms) {
+    if (ms <= 0) return 'Expirado';
+    const d = Math.floor(ms / 86400000);
+    const h = Math.floor((ms % 86400000) / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  },
+
+  async regenerateSyncCode() {
+    window.CloudSync.getSyncCode(true);
+    Toast.show('🔄 Código regenerado — caduca en 7 días', 'success');
+    this.showCloudSyncModal();
   },
 
   async importCloudToken() {

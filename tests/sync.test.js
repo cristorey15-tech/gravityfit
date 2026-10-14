@@ -3,9 +3,17 @@
 // ============================================
 // Unit tests for the pure/testable helpers in sync.js (no Firebase needed).
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { btoa, atob } from 'node:buffer';
 import { CloudSync } from '../js/sync.js';
+import { Storage } from '../js/storage.js';
+
+// Isolate storage + cloud state between tests
+beforeEach(() => {
+  Storage._state = {};
+  localStorage.clear();
+  CloudSync.cloudId = null;
+});
 
 describe('CloudSync._randomId', () => {
   it('produces a 32-char hex id', () => {
@@ -68,5 +76,53 @@ describe('CloudSync token (expiring capability)', () => {
   it('parseToken still accepts legacy v1 tokens (no exp field)', () => {
     const legacy = btoa(JSON.stringify({ id: 'abc123', timestamp: 123 }));
     expect(CloudSync.parseToken(legacy).id).toBe('abc123');
+  });
+});
+
+describe('CloudSync.tokenExpiry', () => {
+  it("returns a token's exp as ms epoch", () => {
+    const code = CloudSync.getSyncToken();
+    expect(CloudSync.tokenExpiry(code)).toBe(CloudSync.parseToken(code).exp);
+  });
+
+  it('returns null for an invalid token', () => {
+    expect(CloudSync.tokenExpiry('%%%bad%%%')).toBe(null);
+  });
+});
+
+describe('CloudSync.getSyncCode (stable + countdown)', () => {
+  it('returns a code with a future expiry and caches it on the user', () => {
+    const { code, exp } = CloudSync.getSyncCode();
+    expect(typeof code).toBe('string');
+    expect(exp).toBeGreaterThan(Date.now());
+    expect(CloudSync.parseToken(code).exp).toBe(exp);
+  });
+
+  it('reuses the same code across calls so the countdown is real', () => {
+    const a = CloudSync.getSyncCode();
+    const b = CloudSync.getSyncCode();
+    expect(b.code).toBe(a.code);
+    expect(b.exp).toBe(a.exp);
+  });
+
+  it('force=true mints a fresh expiry (>= previous)', () => {
+    const a = CloudSync.getSyncCode();
+    const b = CloudSync.getSyncCode(true);
+    expect(b.exp).toBeGreaterThanOrEqual(a.exp);
+  });
+});
+
+describe('CloudSync.getStatus', () => {
+  it('reports disconnected when Firebase is not initialized', () => {
+    const s = CloudSync.getStatus();
+    expect(s.connected).toBe(false);
+    expect(s.authed).toBe(false);
+  });
+
+  it('flags a weak (legacy) cloudId', () => {
+    const user = Storage.getUser();
+    user.cloudId = 'user_1700000000000_abc';
+    Storage.saveUser(user);
+    expect(CloudSync.getStatus().idIsWeak).toBe(true);
   });
 });
