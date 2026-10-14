@@ -1065,7 +1065,10 @@ export const Storage = {
   },
   addCompetition(comp) {
     const comps = this.getCompetitions();
-    comp.id = 'comp_' + this.secureId();
+    // Respect a provided id (joining via share code adopts the shared id so all
+    // members write dailyStats to the same path); otherwise mint a fresh
+    // unguessable one.
+    if (!comp.id) comp.id = 'comp_' + this.secureId();
     comp.createdAt = new Date().toISOString();
     comp.members = comp.members || [];
     comp.dailyStats = {};
@@ -1082,7 +1085,10 @@ export const Storage = {
       if (!decoded.id || !decoded.name) return null;
       let comp = this.getCompetition(decoded.id);
       if (!comp) {
-        comp = this.addCompetition({ name: decoded.name, creator: decoded.creator, members: [] });
+        // Adopt the shared competition id from the code — regenerating it here
+        // (the old behavior) left every member on a different compId, so their
+        // dailyStats never aggregated on the same leaderboard.
+        comp = this.addCompetition({ id: decoded.id, name: decoded.name, creator: decoded.creator, members: [] });
       }
       const user = this.getUser();
       const alreadyMember = comp.members.find(m => m.userId === user.cloudId);

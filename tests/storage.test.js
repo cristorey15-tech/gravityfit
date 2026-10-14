@@ -42,6 +42,40 @@ describe('Storage', () => {
     });
   });
 
+  describe('Competition join (shared id)', () => {
+    it('joinCompetition adopts the id from the share code (not a regenerated one)', () => {
+      const creator = Storage.addCompetition({ name: 'Reto', creator: 'Ana', members: [] });
+      const code = Storage.generateCompetitionCode(creator);
+
+      // Simulate a second device: no local competitions, then join by code
+      Storage.saveCompetitions([]);
+      const joined = Storage.joinCompetition(code);
+
+      expect(joined).not.toBeNull();
+      expect(joined.id).toBe(creator.id);
+      expect(Storage.getCompetition(creator.id)).toBeTruthy();
+    });
+
+    it('joinCompetition adds the current user as a member', () => {
+      const creator = Storage.addCompetition({ name: 'Reto', creator: 'Ana', members: [] });
+      const code = Storage.generateCompetitionCode(creator);
+      Storage.saveCompetitions([]);
+
+      const joined = Storage.joinCompetition(code);
+      const user = Storage.getUser();
+      expect(joined.members.some((m) => m.userId === user.cloudId)).toBe(true);
+    });
+
+    it('joining an already-local competition does not duplicate it', () => {
+      const creator = Storage.addCompetition({ name: 'Reto', creator: 'Ana', members: [] });
+      const code = Storage.generateCompetitionCode(creator);
+      Storage.joinCompetition(code); // first join
+      const again = Storage.joinCompetition(code); // same code again
+      expect(Storage.getCompetitions().length).toBe(1);
+      expect(again.id).toBe(creator.id);
+    });
+  });
+
   describe('User settings', () => {
     it('should return default user when no user stored', () => {
       const user = Storage.getUser();
