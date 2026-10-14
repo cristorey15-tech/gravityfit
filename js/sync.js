@@ -35,7 +35,7 @@ export const CloudSync = {
 
   // Firebase genérico o por defecto (si proporcionas tus propias credenciales en el futuro, las pones aquí)
   defaultConfig: {
-    databaseURL: 'https://gravityfit-sync-default-rtdb.firebaseio.com',
+    databaseURL: 'https://gravityfit-ba2e9-default-rtdb.europe-west1.firebasedatabase.app',
   },
 
   // ---- ID + token helpers (pure, unit-testable) ----
