@@ -502,7 +502,26 @@ export const HistoryScreen = {
     });
   },
 
+  // Drive a chart draw as a short eased tween (progress 0→1 via rAF).
+  // Stops early if the canvas was removed (e.g. the user navigated away).
+  _animateChart(ctx, draw, duration = 650) {
+    const canvas = ctx.canvas;
+    const start = performance.now();
+    const step = (now) => {
+      if (canvas && !canvas.isConnected) return;
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      draw(eased);
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  },
+
   drawLineChart(ctx, w, h, data, labels) {
+    this._animateChart(ctx, (p) => this._renderLineChart(ctx, w, h, data, labels, p));
+  },
+
+  _renderLineChart(ctx, w, h, data, labels, p) {
     const padding = { top: 20, right: 16, bottom: 30, left: 45 };
     const chartW = w - padding.left - padding.right;
     const chartH = h - padding.top - padding.bottom;
@@ -515,7 +534,7 @@ export const HistoryScreen = {
 
     ctx.clearRect(0, 0, w, h);
 
-    // Grid lines
+    // Grid lines (static)
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
@@ -533,13 +552,19 @@ export const HistoryScreen = {
       y: padding.top + chartH - ((val - minVal) / range) * chartH
     }));
 
+    // Reveal the plotted data left→right through a growing clip as p goes 0→1
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(padding.left - 6, 0, (chartW + 12) * p, h);
+    ctx.clip();
+
     // Gradient fill
     const gradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
     gradient.addColorStop(0, accent + '33');
     gradient.addColorStop(1, accent + '00');
     ctx.beginPath();
     ctx.moveTo(points[0].x, h - padding.bottom);
-    points.forEach(p => ctx.lineTo(p.x, p.y));
+    points.forEach(pt => ctx.lineTo(pt.x, pt.y));
     ctx.lineTo(points[points.length - 1].x, h - padding.bottom);
     ctx.closePath();
     ctx.fillStyle = gradient;
@@ -551,23 +576,29 @@ export const HistoryScreen = {
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    points.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
     ctx.stroke();
 
     // Dots
-    points.forEach(p => {
+    points.forEach(pt => {
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
       ctx.fillStyle = accent;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+      ctx.arc(pt.x, pt.y, 2, 0, Math.PI * 2);
       ctx.fillStyle = '#0D0D0D';
       ctx.fill();
     });
+
+    ctx.restore();
   },
 
   drawBarChart(ctx, w, h, data, labels) {
+    this._animateChart(ctx, (p) => this._renderBarChart(ctx, w, h, data, labels, p));
+  },
+
+  _renderBarChart(ctx, w, h, data, labels, p) {
     const padding = { top: 15, right: 16, bottom: 25, left: 30 };
     const chartW = w - padding.left - padding.right;
     const chartH = h - padding.top - padding.bottom;
@@ -580,17 +611,20 @@ export const HistoryScreen = {
 
     const barWidth = Math.min(chartW / data.length * 0.6, 30);
     const gap = chartW / data.length;
+    const baseline = padding.top + chartH;
 
     data.forEach((val, i) => {
       const x = padding.left + gap * i + (gap - barWidth) / 2;
-      const barH = (val / maxVal) * chartH;
-      const y = padding.top + chartH - barH;
+      const fullBarH = (val / maxVal) * chartH;
+      const barH = fullBarH * p; // grow from the bottom
+      const y = baseline - barH;
 
-      // Bar with gradient
-      const grad = ctx.createLinearGradient(x, y, x, y + barH);
+      // Bar with gradient (anchored to the baseline so it grows upward)
+      const grad = ctx.createLinearGradient(x, y, x, baseline);
       grad.addColorStop(0, barAccent);
       grad.addColorStop(1, barAccent + '4D');
-      ctx.fillStyle = grad;      ctx.beginPath();
+      ctx.fillStyle = grad;
+      ctx.beginPath();
       if (ctx.roundRect) {
         ctx.roundRect(x, y, barWidth, barH, 3);
       } else {
@@ -598,13 +632,13 @@ export const HistoryScreen = {
       }
       ctx.fill();
 
-      // Value on top
+      // Value rides the growing bar top
       ctx.fillStyle = '#F5F5F5';
       ctx.font = 'bold 11px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(val, x + barWidth / 2, y - 4);
 
-      // Label
+      // Label (static at the bottom)
       ctx.fillStyle = '#666';
       ctx.font = '10px Inter, sans-serif';
       ctx.fillText(labels[i], x + barWidth / 2, h - 6);
