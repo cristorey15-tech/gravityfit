@@ -520,6 +520,9 @@ export const HomeScreen = {
           <span style="font-size:0.6rem;color:var(--color-text-tertiary)">según tu RPE y fatiga</span>
         </div>
         ${rows}
+        <div style="border-top:1px solid var(--color-border);margin-top:4px;padding-top:6px;text-align:right">
+          <a onclick="AICoach.showRPEGuide()" style="font-size:0.65rem;color:var(--color-text-tertiary);cursor:pointer;text-decoration:underline">¿Qué es el RPE y por qué lo uso?</a>
+        </div>
       </div>`;
   },
 

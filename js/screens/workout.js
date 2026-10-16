@@ -62,6 +62,7 @@ export const WorkoutScreen = {
       <div class="screen-content" style="padding-top:8px">
         <input class="workout-title-input" value="${escapeHtml(this.activeWorkout.name)}" 
           placeholder="Nombre del entrenamiento" onchange="WorkoutScreen.activeWorkout.name=this.value;WorkoutScreen.save()">
+        ${this.renderCoachTips()}
         <div id="workout-exercises-list">
           ${this.renderExercises(user)}
         </div>
@@ -74,6 +75,27 @@ export const WorkoutScreen = {
     `;
     this.startTimer();
     this.showSwipeHint();
+  },
+
+  renderCoachTips() {
+    if (!this.activeWorkout || typeof window.AICoach === 'undefined') return '';
+    let tips = [];
+    try { tips = window.AICoach.getWorkoutTips(this.activeWorkout) || []; } catch { return ''; }
+    if (!tips.length) return '';
+
+    return `
+      <div class="coach-suggestion" style="flex-direction:column;align-items:stretch;gap:6px;margin:0 0 12px;border-left-color:var(--color-accent);background:rgba(167,139,250,0.08)">
+        <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:0.8125rem">
+          <span style="font-size:1rem">🧠</span>
+          <span>Coach — en vivo</span>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;padding:2px 8px;font-size:0.65rem;color:var(--color-accent)" onclick="AICoach.showRPEGuide()">¿Qué es el RPE?</button>
+        </div>
+        ${tips.map(t => `
+          <div style="display:flex;gap:8px;font-size:0.75rem;line-height:1.45;color:var(--color-text-secondary)">
+            <span style="flex-shrink:0">${t.icon}</span>
+            <span>${escapeHtml(t.text)}</span>
+          </div>`).join('')}
+      </div>`;
   },
 
   renderExercises(user) {
@@ -186,7 +208,7 @@ export const WorkoutScreen = {
           ${(ex.notes !== undefined || ex.rpe !== undefined) ? `
             <div style="margin-top:12px;background:rgba(0,0,0,0.2);padding:12px;border-radius:var(--radius-md)">
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-                <label style="font-size:0.875rem;color:var(--color-text-secondary);flex:1">RPE (Esfuerzo)</label>
+                <label style="font-size:0.875rem;color:var(--color-text-secondary);flex:1">RPE (Esfuerzo) <a onclick="AICoach.showRPEGuide()" style="font-size:0.65rem;color:var(--color-accent);cursor:pointer;text-decoration:underline">¿qué es?</a></label>
                 <select class="input" style="width:80px;padding:4px" onchange="WorkoutScreen.updateExData(${exIdx}, 'rpe', this.value)">
                   <option value="">-</option>
                   ${[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map(v => `<option value="${v}" ${ex.rpe == v ? 'selected' : ''}>${v}</option>`).join('')}
@@ -799,6 +821,7 @@ export const WorkoutScreen = {
       ${[6,7,8,9,10].map(v => `
         <button class="rpe-btn" data-rpe="${v}" onclick="WorkoutScreen.setRPESet(${exIdx},${setIdx},${v})">${v}</button>
       `).join('')}
+      <button class="rpe-btn" style="opacity:0.7" onclick="AICoach.showRPEGuide()" title="¿Qué es el RPE?">?</button>
     `;
     row.appendChild(prompt);
     setTimeout(() => prompt.classList.add('active'), 10);
@@ -814,6 +837,14 @@ export const WorkoutScreen = {
       setTimeout(() => prompt.remove(), 200);
     }
     if (navigator.vibrate) navigator.vibrate(5);
+
+    // Live coaching feedback on the chosen RPE
+    if (typeof window.AICoach !== 'undefined') {
+      try {
+        const fb = window.AICoach.getRPEFeedback(rpe);
+        if (fb) Toast.show(fb.message, fb.tone, 3500);
+      } catch { /* feedback es best-effort */ }
+    }
   },
 
   // --- FEATURE E: Next Exercise Info for RestTimer ---

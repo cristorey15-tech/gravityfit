@@ -7,6 +7,18 @@ import { Modal, Toast, escapeHtml } from './components.js';
 import { App } from './app.js';
 
 export const AICoach = {
+  // =============================================
+  // RPE thresholds — single source of truth so weight suggestion,
+  // proactive insights and in-workout tips all agree on the bands.
+  // =============================================
+  RPE_THRESHOLDS: {
+    target: 8,        // zona objetivo de autoregulación (lo que buscamos)
+    critical: 9.5,    // ≥9.5: casi al fallo siempre → bajar intensidad
+    overreach: 9,     // ≥9 + otra señal (peso a la baja / RPE ya alto) → sobreesfuerzo
+    margin: 7,        // 7–8 = margen pequeño; <7 = margen amplio
+    rising: 1,        // subida de RPE ≥1 punto vs. sesiones anteriores → vigilar
+  },
+
   // 1. Calcula la fatiga muscular basada en los últimos 3 días (72h)
   getMuscleFatigue() {
     const workouts = Storage.getWorkouts();
@@ -178,7 +190,7 @@ export const AICoach = {
 
   _buildWorkoutFromTemplate(name, templateExercises) {
     const user = Storage.getUser();
-    const TARGET_RPE = 8;
+    const TARGET_RPE = this.RPE_THRESHOLDS.target;
     const generatedExercises = templateExercises.map(ex => {
       const e1RM = this.estimate1RM(ex.exerciseId);
       // RPE autoregulation: when the user logs RPE, base the working weight on
@@ -353,6 +365,166 @@ export const AICoach = {
     return { count: sessions.length, recentRPE, olderRPE, weightTrend, lastWeight: recentW };
   },
 
+  // Classify a getRPEStats() result into one coaching state (fine-grained bands).
+  _classifyRPE(stats) {
+    if (!stats || !stats.count) return null;
+    const T = this.RPE_THRESHOLDS;
+    const r = stats.recentRPE;
+    const older = stats.olderRPE;
+    const rising = older != null && r - older >= T.rising;
+    const declining = stats.weightTrend === 'declining';
+
+    if (r >= T.critical) return 'critical';                                  // ≥9.5
+    if (r >= T.overreach && (declining || older >= 8.5)) return 'overreach'; // ≥9 + señal
+    if (r >= T.overreach) return 'high';                                     // 9–9.4 sin otras señales
+    if (stats.count >= 3 && stats.weightTrend === 'stable' && r >= T.target + 0.5) return 'stalled';
+    if (rising && r >= T.target + 0.5) return 'rising';                      // el esfuerzo se dispara
+    if (r < T.margin && declining) return 'lossStrength';                    // fuerza a la baja con poco esfuerzo
+    if (r >= T.target) return 'onTarget';                                    // 8–8.9 en el blanco
+    if (r >= T.margin) return 'margin';                                      // 7–7.9
+    return 'under';                                                          // <7
+  },
+
+  // Turn RPE stats into a coach insight (or null when there's nothing to say).
+  _rpeInsight(name, stats) {
+    const state = this._classifyRPE(stats);
+    if (!state) return null;
+    const r = stats.recentRPE.toFixed(1);
+    const older = stats.olderRPE != null ? stats.olderRPE.toFixed(1) : null;
+
+    switch (state) {
+      case 'critical':
+        return { kind: state, icon: '🚨', severity: 'alert', title: `Al fallo en ${name}`,
+          detail: `RPE medio ${r} — muy cerca del fallo. Baja la carga ~5–10% o deja 2 reps en reserva.` };
+      case 'overreach':
+        return { kind: state, icon: '⚠️', severity: 'warn', title: `Sobreesfuerzo en ${name}`,
+          detail: `RPE medio ${r}${stats.weightTrend === 'declining' ? ' y tu peso máximo baja' : ''}. Baja la carga ~5–10% esta semana.` };
+      case 'high':
+        return { kind: state, icon: '🔥', severity: 'warn', title: `Esfuerzo alto en ${name}`,
+          detail: `RPE medio ${r}, por encima de tu objetivo (8). Deja 1–2 reps en reserva para recuperar mejor.` };
+      case 'rising':
+        return { kind: state, icon: '📈', severity: 'warn', title: `El esfuerzo sube en ${name}`,
+          detail: `Tu RPE pasa de ${older} a ${r}. Si sigue subiendo con el mismo peso, toca bajar carga.` };
+      case 'stalled':
+        return { kind: state, icon: '🚧', severity: 'warn', title: `Estancado en ${name}`,
+          detail: `RPE ${r} pero tu peso máximo lleva 3+ sesiones igual. Cambia series/reps o añade 2.5 kg.` };
+      case 'lossStrength':
+        return { kind: state, icon: '📉', severity: 'warn', title: `Fuerza a la baja en ${name}`,
+          detail: `Tu peso máximo baja con solo RPE ${r}. Revisa técnica, estrés y descanso antes que la carga.` };
+      case 'onTarget':
+        return { kind: state, icon: '🎯', severity: 'good', title: `En el blanco en ${name}`,
+          detail: `RPE medio ${r} — justo en tu zona objetivo (8). Así se progresa, sigue así.` };
+      case 'margin':
+        return { kind: state, icon: '📈', severity: 'good', title: `Margen en ${name}`,
+          detail: `RPE medio ${r} — un punto por debajo del objetivo: sube 2.5 kg o +1 repetición.` };
+      case 'under':
+        return { kind: state, icon: '💪', severity: 'good', title: `Margen amplio en ${name}`,
+          detail: `RPE medio ${r} — puedes subir la carga ~5% o hacer una serie más.` };
+      default:
+        return null;
+    }
+  },
+
+  // Live feedback right after the user taps an RPE button mid-workout.
+  getRPEFeedback(rpe) {
+    const T = this.RPE_THRESHOLDS;
+    const v = Number(rpe);
+    if (v >= T.critical) return { tone: 'warning', message: '🚨 Casi al fallo. En la próxima serie baja ~5% o deja 2 reps en reserva.' };
+    if (v >= T.overreach) return { tone: 'warning', message: '⚠️ Muy exigente. Deja 1–2 reps en reserva en la siguiente serie.' };
+    if (v >= T.target) return { tone: 'success', message: '🎯 En el blanco — tu zona objetivo. Mantén la carga.' };
+    if (v >= T.margin) return { tone: 'info', message: '📈 Un punto por debajo: la próxima serie puedes subir 2.5 kg o +1 reps.' };
+    return { tone: 'info', message: '💪 Holgado: sube la carga ~5% o añade una serie.' };
+  },
+
+  // Educational modal: what RPE is and why the app uses it.
+  showRPEGuide() {
+    const scale = [
+      [6, 'Podrías hacer 4+ repeticiones más', 'Muy por debajo de tu máximo'],
+      [7, 'Quedarían ~3 repeticiones', 'Progresar con técnica limpia'],
+      [8, 'Quedarían ~2 repeticiones', 'Zona objetivo — hipertrofia y fuerza'],
+      [9, 'Quedaría 1 sola repetición', 'Cerca del fallo, recuperación costosa'],
+      [10, 'Fallo muscular total', 'Solo puntual: nunca entrenes siempre así'],
+    ];
+    const rows = scale.map(([v, meaning, use]) => `
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--color-border)">
+        <span style="min-width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.875rem;background:${v >= 9 ? 'rgba(239,68,68,0.15)' : v === 8 ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.08)'};color:${v >= 9 ? 'var(--color-danger)' : 'var(--color-success)'}">${v}</span>
+        <div>
+          <div style="font-size:0.8125rem;font-weight:600">${meaning}</div>
+          <div style="font-size:0.75rem;color:var(--color-text-secondary)">${use}</div>
+        </div>
+      </div>`).join('');
+
+    Modal.show(`
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-size:3rem;margin-bottom:8px">📏</div>
+        <p style="font-size:0.875rem;color:var(--color-text-secondary);line-height:1.5">
+          <strong>RPE</strong> = <em>Rate of Perceived Exertion</em> (esfuerzo percibido): qué duro se sintió <em>para ti</em> esa serie, del 1 al 10. No es una carga externa como el peso — es tu esfuerzo real.
+        </p>
+      </div>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Escala</div>
+      ${rows}
+      <div style="font-size:0.75rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">Por qué importa</div>
+      <ul style="font-size:0.8125rem;line-height:1.6;padding-left:18px;color:var(--color-text-secondary)">
+        <li><strong>Autoregulación:</strong> el mismo peso se siente distinto según duermes, comes o estás estresado. El RPE ajusta la carga a tu día real.</li>
+        <li><strong>Protección:</strong> entrenar siempre a RPE 9–10 acumula fatiga y lesión. La zona objetivo es RPE 8.</li>
+        <li><strong>Detecta estancamiento:</strong> si el peso no sube pero el RPE sube, hay un problema que arreglar.</li>
+      </ul>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">Cómo lo uso yo</div>
+      <ul style="font-size:0.8125rem;line-height:1.6;padding-left:18px;color:var(--color-text-secondary)">
+        <li>Marco el <strong>RPE 8</strong> tras cada serie (botón automático al completarla).</li>
+        <li>Sus pesos sugeridos salen de lo que <em>realmente lograste</em> a ese RPE, no de un % a ciegas.</li>
+        <li>Te aviso en el home si vas al fallo, con margen o estancado.</li>
+      </ul>
+      <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="Modal.hide()">¡Entendido!</button>
+    `, { title: '¿Qué es el RPE?' });
+  },
+
+  // Contextual tips shown live at the top of the active workout screen.
+  getWorkoutTips(workout) {
+    if (!workout || !workout.exercises || !workout.exercises.length) return [];
+    const tips = [];
+    const fatigue = this.getMuscleFatigue();
+    const seenMuscles = {};
+
+    for (const ex of workout.exercises) {
+      if (tips.length >= 2) break;
+      const exData = Storage.getExercise(ex.exerciseId);
+      if (!exData) continue;
+
+      // 1) Per-exercise RPE signal from the last sessions
+      const stats = this.getRPEStats(ex.exerciseId);
+      const state = this._classifyRPE(stats);
+      if (state === 'critical' || state === 'overreach' || state === 'high' || state === 'lossStrength') {
+        tips.push({ icon: '⚠️', text: `${exData.name}: la última vez quedaste en RPE ${stats.recentRPE.toFixed(1)}. Hoy deja 1–2 reps en reserva o baja ~5% la carga.` });
+      } else if (state === 'under' || state === 'margin') {
+        tips.push({ icon: '📈', text: `${exData.name}: quedaste en RPE ${stats.recentRPE.toFixed(1)} — hoy puedes subir 2.5 kg o +1 repetición.` });
+      } else if (state === 'stalled') {
+        tips.push({ icon: '🚧', text: `${exData.name}: 3+ sesiones con el mismo peso. Cambia series/reps o añade 2.5 kg para romper el estancamiento.` });
+      }
+
+      // 2) Fatigue of the muscles being trained today
+      const muscle = exData.primaryMuscle;
+      if (muscle && !seenMuscles[muscle]) {
+        seenMuscles[muscle] = true;
+        const f = fatigue[muscle] || 0;
+        if (f >= 70 && tips.length < 2) {
+          tips.push({ icon: '🛌', text: `${muscle} está al ${f}% de fatiga (72h): calienta bien y controla la técnica.` });
+        }
+      }
+    }
+
+    // 3) Weekly goal still pending
+    if (tips.length < 3 && typeof Storage.getWorkoutsThisWeek === 'function') {
+      const goal = Storage.getUser().weeklyGoal || 4;
+      const done = Storage.getWorkoutsThisWeek().length;
+      if (done < goal) {
+        tips.push({ icon: '🎯', text: `Meta semanal ${done}/${goal}: te faltan ${goal - done} para cumplirla.` });
+      }
+    }
+
+    return tips.slice(0, 3);
+  },
+
   // =============================================
   // Proactive Coach — insights surfaced without the user asking
   // =============================================
@@ -360,7 +532,7 @@ export const AICoach = {
     const insights = [];
     const user = Storage.getUser();
 
-    // 1) RPE-based: overreaching vs available margin on recently-logged exercises
+    // 1) RPE-based: classified bands (sobreesfuerzo / al fallo / estancado / en el blanco / margen)
     const recentWorkouts = Storage.getWorkouts().slice(0, 12);
     const exIds = [];
     recentWorkouts.forEach(w => (w.exercises || []).forEach(e => {
@@ -372,19 +544,9 @@ export const AICoach = {
       const stats = this.getRPEStats(exId);
       if (!stats || stats.count < 2) continue;
       const exData = Storage.getExercise(exId);
-      const name = exData ? exData.name : 'un ejercicio';
-      const rpeStr = stats.recentRPE.toFixed(1);
-      if (stats.recentRPE >= 9 && stats.weightTrend === 'declining') {
-        insights.push({
-          icon: '⚠️', severity: 'warn', title: `Sobreesfuerzo en ${name}`,
-          detail: `RPE medio ${rpeStr} y tu peso máximo baja. Baja la carga ~5–10% esta semana.`,
-        });
-        rpeInsights++;
-      } else if (stats.recentRPE <= 7 && stats.weightTrend !== 'declining') {
-        insights.push({
-          icon: '📈', severity: 'good', title: `Margen en ${name}`,
-          detail: `Quedas en RPE ${rpeStr} — puedes subir carga o hacer una serie más.`,
-        });
+      const ins = this._rpeInsight(exData ? exData.name : 'un ejercicio', stats);
+      if (ins) {
+        insights.push(ins);
         rpeInsights++;
       }
     }
@@ -428,6 +590,37 @@ export const AICoach = {
         icon: '🎯', severity: 'info', title: `Meta semanal ${done}/${goal}`,
         detail: `Te falta${missing > 1 ? 'n' : ''} ${missing} entreno${missing > 1 ? 's' : ''} para tu meta.`,
       });
+    } else {
+      insights.push({
+        icon: '🏆', severity: 'good', title: `Meta semanal cumplida ${done}/${goal}`,
+        detail: 'Objetivo de la semana cerrado. Mantén el ritmo o toca descansar.',
+      });
+    }
+
+    // 5) Weekly volume vs. previous week (drop is a silent progress killer)
+    if (typeof Storage.getWeekComparison === 'function') {
+      try {
+        const cmp = Storage.getWeekComparison();
+        if (cmp.lastVol > 0 && cmp.thisVol > 0 && cmp.thisVol < cmp.lastVol * 0.6) {
+          const pct = Math.round((cmp.thisVol / cmp.lastVol) * 100);
+          insights.push({
+            icon: '🪫', severity: 'warn', title: 'Volumen a la baja',
+            detail: `Llevas el ${pct}% del volumen de la semana anterior. Si es un deload, bien; si no, no dejes caer el volumen.`,
+          });
+        }
+      } catch { /* sin datos de comparación */ }
+    }
+
+    // 6) RPE nudge — the whole system needs logged RPE to work
+    if (!rpeInsights && recentWorkouts.length >= 3) {
+      const anyRPE = recentWorkouts.some(w => (w.exercises || []).some(e =>
+        (e.sets || []).some(s => Number(s.rpe) > 0)));
+      if (!anyRPE) {
+        insights.push({
+          icon: '📏', severity: 'info', title: 'Marca el RPE tras cada serie',
+          detail: 'Aún no registras esfuerzo: mis pesos y consejos saldrían de un % a ciegas. Pulsa "?" para saber cómo se usa.',
+        });
+      }
     }
 
     const order = { alert: 0, warn: 1, good: 2, info: 3 };
