@@ -52,14 +52,16 @@ export const WorkoutScreen = {
               <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.completeAMRAPRound()" style="font-size:1rem;background:var(--color-accent-dim);color:var(--color-accent);padding:4px 8px;border-radius:12px">+1 Ronda</button>
             </div>
           ` : `
-          <div style="display:flex;align-items:center;gap:8px">
-            <div class="workout-timer-display" id="workout-elapsed">${this.formatTime(elapsed)}</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="btn btn-ghost btn-icon sm" onclick="WorkoutScreen.togglePause()" title="${this.isPaused() ? 'Reanudar' : 'Pausar'}" style="font-size:1.1rem;padding:4px;background:${this.isPaused() ? 'var(--color-accent-dim)' : 'transparent'};color:${this.isPaused() ? 'var(--color-accent)' : ''}">${this.isPaused() ? '▶️' : '⏸️'}</button>
+            <div class="workout-timer-display${this.isPaused() ? ' paused' : ''}" id="workout-elapsed">${this.formatTime(elapsed)}</div>
             <span id="workout-cal-estimate" style="font-size:0.7rem;color:var(--color-warning);font-weight:600;white-space:nowrap">~${Calories.estimateLive(this.activeWorkout, elapsed, Storage.getUser()).kcal} cal</span>
           </div>`}
         </div>
         <button class="btn btn-primary btn-sm" onclick="WorkoutScreen.finishWorkout()">Finalizar</button>
       </div>
       <div class="screen-content" style="padding-top:8px">
+        ${this.isPaused() ? `<div class="workout-paused-banner">⏸ En pausa — el cronómetro y las calorías no avanzan. Pulsa ▶ para continuar.</div>` : ''}
         <input class="workout-title-input" value="${escapeHtml(this.activeWorkout.name)}" 
           placeholder="Nombre del entrenamiento" onchange="WorkoutScreen.activeWorkout.name=this.value;WorkoutScreen.save()">
         ${this.renderCoachTips()}
@@ -1150,7 +1152,7 @@ export const WorkoutScreen = {
       return;
     }
     const now = new Date();
-    const duration = Math.floor((now.getTime() - this.startTime) / 1000);
+    const duration = this.getElapsed(); // excludes any paused time
 
     // Calculate per-exercise time spent
     this.activeWorkout.exercises.forEach(ex => {
@@ -1519,9 +1521,40 @@ export const WorkoutScreen = {
   stopTimer() {
     if (this.workoutTimer) { clearInterval(this.workoutTimer); this.workoutTimer = null; }
   },
+
+  // --- Pause / resume the workout clock ---
+  // pausedAt: epoch ms when the current pause started (null = running).
+  // pausedTotalMs: accumulated paused time, so the elapsed clock excludes it.
+  // Both live on activeWorkout and therefore survive app restarts.
+  isPaused() {
+    return !!(this.activeWorkout && this.activeWorkout.pausedAt);
+  },
+
+  getPausedMs() {
+    const aw = this.activeWorkout;
+    if (!aw) return 0;
+    return (aw.pausedTotalMs || 0) + (aw.pausedAt ? Math.max(0, Date.now() - aw.pausedAt) : 0);
+  },
+
+  togglePause() {
+    if (!this.activeWorkout) return;
+    const aw = this.activeWorkout;
+    if (aw.pausedAt) {
+      aw.pausedTotalMs = this.getPausedMs();
+      aw.pausedAt = null;
+      Toast.show('▶ Entrenamiento reanudado', 'success', 2000);
+    } else {
+      aw.pausedAt = Date.now();
+      Toast.show('⏸ En pausa — el cronómetro no corre', 'info', 2500);
+    }
+    if (navigator.vibrate) navigator.vibrate(10);
+    this.save();
+    this.render();
+  },
+
   getElapsed() {
     if (!this.startTime) return 0;
-    return Math.floor((Date.now() - this.startTime) / 1000);
+    return Math.max(0, Math.floor((Date.now() - this.startTime - this.getPausedMs()) / 1000));
   },
   formatTime(s) {
     const h = Math.floor(s / 3600);

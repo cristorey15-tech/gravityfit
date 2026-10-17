@@ -52,6 +52,13 @@
   font-size:var(--font-size-md); font-weight:var(--font-weight-bold);
   color:var(--color-accent); font-variant-numeric:tabular-nums;
 }
+.workout-timer-display.paused { color:var(--color-warning); }
+.workout-paused-banner {
+  display:flex; align-items:center; gap:8px;
+  background:rgba(251,191,36,0.12); border:1px solid var(--color-warning);
+  color:var(--color-warning); border-radius:var(--radius-md);
+  padding:10px 12px; margin-bottom:8px; font-size:0.8125rem; font-weight:600;
+}
 .workout-title-input {
   font-size:var(--font-size-lg); font-weight:var(--font-weight-bold);
   background:none; border:none; color:var(--color-text-primary);
