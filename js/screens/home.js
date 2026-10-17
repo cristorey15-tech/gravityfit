@@ -103,10 +103,12 @@ export const HomeScreen = {
           </button>
         </div>
         ${this.renderCoachInsights()}
+        ${this.renderNutritionWidget()}
         ${this.renderCompetitionWidget()}
         ${this.renderQuickActions(routines)}
         
 
+        ${this.renderWeekPlanToday()}
         ${this.renderActiveProgram()}
 
         ${this.renderWeeklyChallenges()}
@@ -504,7 +506,7 @@ export const HomeScreen = {
       good: 'var(--color-accent)',
       info: 'var(--color-info)',
     };
-    const rows = insights.slice(0, 2).map(ins => `
+    const rows = insights.slice(0, 3).map(ins => `
       <div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0">
         <span style="font-size:1.1rem;line-height:1.2">${ins.icon}</span>
         <div style="flex:1;min-width:0">
@@ -524,6 +526,100 @@ export const HomeScreen = {
           <a onclick="AICoach.showRPEGuide()" style="font-size:0.65rem;color:var(--color-text-tertiary);cursor:pointer;text-decoration:underline">¿Qué es el RPE y por qué lo uso?</a>
         </div>
       </div>`;
+  },
+
+  renderNutritionWidget() {
+    const key = window.Storage.todayKey();
+    const day = window.Storage.getNutritionDay(key);
+    const goals = window.Storage.getNutritionGoals();
+    const kcal = day ? (day.kcal || 0) : 0;
+    const protein = day ? (day.protein || 0) : 0;
+    const pct = (v, g) => Math.min(100, Math.round((v / Math.max(1, g)) * 100));
+
+    const bar = (value, goal, color) => {
+      const p = pct(value, goal);
+      return `<div style="height:5px;border-radius:3px;background:var(--color-bg-input);margin-top:4px;overflow:hidden">
+        <div style="height:100%;width:${p}%;background:${color};transition:width 0.4s"></div>
+      </div>`;
+    };
+
+    return `
+      <div style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:16px;padding:12px 16px;margin-bottom:16px">
+        <div class="home-section-title" style="margin-bottom:8px">
+          <span>🍎 Nutrición de hoy</span>
+          <span style="font-size:0.6rem;color:var(--color-text-tertiary);cursor:pointer" onclick="HomeScreen.showNutritionModal()">${day ? 'Editar' : 'Registrar'} ✏️</span>
+        </div>
+        <div style="display:flex;gap:16px">
+          <div style="flex:1">
+            <div style="font-size:0.85rem;font-weight:700">${kcal.toLocaleString('es-ES')} <span style="font-size:0.65rem;font-weight:500;color:var(--color-text-tertiary)">/ ${goals.kcal.toLocaleString('es-ES')} kcal</span></div>
+            ${bar(kcal, goals.kcal, 'var(--color-warning)')}
+          </div>
+          <div style="flex:1">
+            <div style="font-size:0.85rem;font-weight:700">${protein} <span style="font-size:0.65rem;font-weight:500;color:var(--color-text-tertiary)">/ ${goals.protein} g proteína</span></div>
+            ${bar(protein, goals.protein, 'var(--color-success)')}
+          </div>
+        </div>
+        ${!day ? `<div style="font-size:0.65rem;color:var(--color-text-tertiary);margin-top:6px">Toca “Registrar” para apuntar lo que has comido — el coach lo tiene en cuenta.</div>` : ''}
+      </div>`;
+  },
+
+  showNutritionModal() {
+    const key = window.Storage.todayKey();
+    const day = window.Storage.getNutritionDay(key) || { kcal: '', protein: '' };
+    const goals = window.Storage.getNutritionGoals();
+    Modal.show(`
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:0.75rem;color:var(--color-text-secondary)">Calorías de hoy (kcal)</label>
+          <input id="nut-kcal" type="number" class="input" inputmode="numeric" value="${day.kcal ?? ''}" placeholder="2200" style="width:100%;margin-top:4px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:0.75rem;color:var(--color-text-secondary)">Proteína (g)</label>
+          <input id="nut-protein" type="number" class="input" inputmode="numeric" value="${day.protein ?? ''}" placeholder="140" style="width:100%;margin-top:4px">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;opacity:0.85">
+        <div style="flex:1">
+          <label style="font-size:0.75rem;color:var(--color-text-secondary)">Meta kcal</label>
+          <input id="nut-goal-kcal" type="number" class="input" inputmode="numeric" value="${goals.kcal}" style="width:100%;margin-top:4px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:0.75rem;color:var(--color-text-secondary)">Meta proteína (g)</label>
+          <input id="nut-goal-protein" type="number" class="input" inputmode="numeric" value="${goals.protein}" style="width:100%;margin-top:4px">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        ${day.kcal !== '' ? `<button class="btn btn-secondary flex-1" onclick="HomeScreen.clearNutrition()">Borrar</button>` : ''}
+        <button class="btn btn-primary flex-1" onclick="HomeScreen.saveNutrition()">Guardar</button>
+      </div>
+    `, { title: '🍎 Nutrición de hoy' });
+  },
+
+  saveNutrition() {
+    const kcal = Math.max(0, Number(document.getElementById('nut-kcal')?.value) || 0);
+    const protein = Math.max(0, Number(document.getElementById('nut-protein')?.value) || 0);
+    const goalKcal = Math.max(0, Number(document.getElementById('nut-goal-kcal')?.value) || 0);
+    const goalProtein = Math.max(0, Number(document.getElementById('nut-goal-protein')?.value) || 0);
+    if (goalKcal > 0 || goalProtein > 0) {
+      window.Storage.setNutritionGoals({ kcal: goalKcal || undefined, protein: goalProtein || undefined });
+    }
+    if (kcal === 0 && protein === 0) {
+      window.Storage.setNutritionDay(window.Storage.todayKey(), null); // no data = clean empty state
+      Modal.hide();
+      this.render();
+      return;
+    }
+    window.Storage.setNutritionDay(window.Storage.todayKey(), { kcal, protein });
+    Modal.hide();
+    Toast.show('🍎 Nutrición registrada', 'success');
+    this.render();
+  },
+
+  clearNutrition() {
+    window.Storage.setNutritionDay(window.Storage.todayKey(), null);
+    Modal.hide();
+    Toast.show('Registro borrado', 'info');
+    this.render();
   },
 
   renderFatigueWidget() {
@@ -640,6 +736,37 @@ export const HomeScreen = {
 
     Modal.show(html, { title: '\u{1FAC0} ' + HomeScreen.muscleLabel(muscleName) });
     if (navigator.vibrate) navigator.vibrate(10);
+  },
+
+  renderWeekPlanToday() {
+    const planId = Storage.getWeekPlanDay(Storage.todayDayKey());
+    if (!planId) return '';
+
+    if (planId === 'rest') {
+      return `<div style="background:var(--color-bg-card);border:1px dashed var(--color-border);border-radius:14px;padding:12px 16px;margin-bottom:16px;text-align:center">
+        <div style="font-size:0.85rem;font-weight:700">🫖 Día de descanso</div>
+        <div style="font-size:0.7rem;color:var(--color-text-tertiary)">Así lo planificaste — descansa o da un paseo suave.</div>
+      </div>`;
+    }
+
+    const routine = Storage.getRoutine(planId);
+    if (!routine) return '';
+    const doneToday = Storage.getWorkouts().some(w => {
+      const d = new Date(w.finishedAt);
+      return Storage._localDateStr(d) === Storage.todayKey() && w.routineId === routine.id;
+    });
+
+    return `
+      <div style="background:var(--color-bg-card);border:1px solid var(--color-accent);border-radius:14px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--color-accent-dim);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">📅</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.7rem;color:var(--color-text-tertiary)">HOY TOCA · PLAN SEMANAL</div>
+          <div style="font-size:0.9rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(routine.name)}</div>
+        </div>
+        ${doneToday
+          ? `<span style="font-size:0.7rem;color:var(--color-success);font-weight:700;white-space:nowrap">✓ Hecho</span>`
+          : `<button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="App.startFromRoutine('${routine.id}')">Empezar</button>`}
+      </div>`;
   },
 
   renderActiveProgram() {

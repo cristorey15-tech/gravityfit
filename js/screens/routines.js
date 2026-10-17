@@ -27,12 +27,140 @@ export const RoutinesScreen = {
       </button>
       <div class="screen-content">
         ${this.renderProgramsSection(routines)}
+        ${this.renderWeekPlanSection(routines)}
         <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px">
           <h2 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold)">Mis Rutinas</h2>
           <button class="btn btn-secondary btn-sm" onclick="RoutinesScreen.showTemplatesGallery()">Explorar Templates</button>
         </div>
         ${this.renderRoutinesList(routines)}
       </div>`;
+  },
+
+  // ==========================================
+  // WEEK PLAN — drag (or tap) routines onto days
+  // ==========================================
+  _selectedPlanRoutine: null,
+  _WEEK_DAYS: [
+    ['mon', 'Lun'], ['tue', 'Mar'], ['wed', 'Mié'], ['thu', 'Jue'],
+    ['fri', 'Vie'], ['sat', 'Sáb'], ['sun', 'Dom'],
+  ],
+
+  renderWeekPlanSection(routines) {
+    const plan = Storage.getWeekPlan();
+    const todayKey = Storage.todayDayKey();
+    const byId = {};
+    routines.forEach(r => { byId[r.id] = r; });
+
+    const daysHtml = this._WEEK_DAYS.map(([key, label]) => {
+      const routineId = plan[key];
+      const isRest = routineId === 'rest';
+      const r = routineId && !isRest ? byId[routineId] : null;
+      const assigned = r || isRest;
+      const name = r ? escapeHtml(r.name) : isRest ? '🫖 Descanso' : '<span style="opacity:0.5">—</span>';
+      const selected = this._selectedPlanRoutine;
+      return `
+        <div class="plan-day${key === todayKey ? ' today' : ''}${selected && !assigned ? ' assignable' : ''}" data-plan-day="${key}"
+             onclick="RoutinesScreen.onPlanDayTap('${key}')">
+          <span class="plan-day-name">${label}${key === todayKey ? ' ·' : ''}</span>
+          <span class="plan-day-routine">${name}</span>
+          ${assigned ? `<button class="plan-day-clear" title="Quitar" onclick="event.stopPropagation();RoutinesScreen.clearPlanDay('${key}')">✕</button>` : ''}
+        </div>`;
+    }).join('');
+
+    const chips = routines.length
+      ? routines.map(r => `
+          <span class="plan-chip${this._selectedPlanRoutine === r.id ? ' selected' : ''}" data-routine-id="${r.id}"
+                onpointerdown="RoutinesScreen.planPointerDown(event, '${r.id}')"
+                onclick="RoutinesScreen.onPlanChipTap('${r.id}')">${escapeHtml(r.name)}</span>`).join('')
+      : '<span style="font-size:0.7rem;color:var(--color-text-tertiary)">Crea una rutina para planificar tu semana.</span>';
+
+    const plannedCount = this._WEEK_DAYS.filter(([k]) => plan[k]).length;
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px">
+        <h2 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold)">📅 Plan semanal</h2>
+        <span style="font-size:0.6rem;color:var(--color-text-tertiary)">${plannedCount}/7 días · arrastra o toca →</span>
+      </div>
+      <div class="plan-grid">${daysHtml}</div>
+      <div class="plan-chips">${chips}</div>
+      ${this._selectedPlanRoutine ? `<div style="font-size:0.65rem;color:var(--color-accent);margin-top:2px">Rutina seleccionada — toca un día para asignarla (o suéltala encima).</div>` : ''}`;
+  },
+
+  onPlanChipTap(routineId) {
+    this._selectedPlanRoutine = this._selectedPlanRoutine === routineId ? null : routineId;
+    this.render();
+  },
+
+  onPlanDayTap(dayKey) {
+    if (!this._selectedPlanRoutine) return;
+    this.assignPlanDay(dayKey, this._selectedPlanRoutine);
+    this._selectedPlanRoutine = null;
+    this.render();
+  },
+
+  assignPlanDay(dayKey, routineId) {
+    Storage.setWeekPlanDay(dayKey, routineId);
+    const r = Storage.getRoutine(routineId);
+    const label = this._WEEK_DAYS.find(([k]) => k === dayKey)?.[1] || dayKey;
+    Toast.show(`📅 ${label}: ${r ? r.name : ''} planificada`, 'success');
+    if (navigator.vibrate) navigator.vibrate(10);
+  },
+
+  clearPlanDay(dayKey) {
+    Storage.setWeekPlanDay(dayKey, null);
+    Toast.show('Día liberado', 'info');
+    this.render();
+  },
+
+  // Pointer-based drag: works with mouse AND touch (HTML5 DnD doesn't on mobile)
+  planPointerDown(e, routineId) {
+    if (e.button !== undefined && e.button !== 0) return;
+    const start = { x: e.clientX, y: e.clientY };
+    const name = Storage.getRoutine(routineId)?.name || 'Rutina';
+    let ghost = null;
+
+    const clearHighlights = () => {
+      document.querySelectorAll('[data-plan-day]').forEach(el => el.classList.remove('plan-day-over'));
+    };
+
+    const onMove = (ev) => {
+      const dist = Math.hypot(ev.clientX - start.x, ev.clientY - start.y);
+      if (!ghost && dist > 8) {
+        ghost = document.createElement('div');
+        ghost.textContent = name;
+        ghost.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;background:var(--color-accent);color:#000;padding:6px 14px;border-radius:20px;font-size:0.8rem;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,0.45);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+        document.body.appendChild(ghost);
+      }
+      if (ghost) {
+        ghost.style.left = (ev.clientX + 14) + 'px';
+        ghost.style.top = (ev.clientY - 18) + 'px';
+        clearHighlights();
+        const under = document.elementFromPoint(ev.clientX, ev.clientY);
+        const day = under && under.closest ? under.closest('[data-plan-day]') : null;
+        if (day) day.classList.add('plan-day-over');
+      }
+    };
+
+    const onUp = (ev) => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      clearHighlights();
+      if (ghost) {
+        ghost.remove();
+        const under = document.elementFromPoint(ev.clientX, ev.clientY);
+        const day = under && under.closest ? under.closest('[data-plan-day]') : null;
+        if (day) {
+          this.assignPlanDay(day.getAttribute('data-plan-day'), routineId);
+          this._selectedPlanRoutine = null;
+          this.render();
+        }
+      }
+      // No ghost → it was a tap: the click handler (onPlanChipTap) deals with it
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   },
 
   renderRoutinesList(routines) {

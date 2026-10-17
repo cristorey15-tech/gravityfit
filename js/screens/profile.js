@@ -303,6 +303,13 @@ export const ProfileScreen = {
             </div>
             <span class="settings-item-value" style="width:20px;height:20px;color:var(--color-text-secondary);display:inline-block">${Icons.ruler}</span>
           </div>
+          <div class="settings-item" onclick="ProfileScreen.showHealthModal()">
+            <div class="settings-item-left">
+              <span style="font-size:1.2rem; margin-right:4px;">❤️</span>
+              <span class="settings-item-label">Salud (sueño, FC, pasos)</span>
+            </div>
+            <span class="settings-item-value" style="font-size:0.7rem;color:var(--color-accent)">Abrir</span>
+          </div>
           <div class="settings-item" onclick="ProfileScreen.showProgressGallery()">
             <div class="settings-item-left">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -413,6 +420,98 @@ export const ProfileScreen = {
     Storage.saveUser(user);
     this.render();
     Toast.show(user.adaptiveRest ? '⚡ Descanso por RPE activado' : 'Descanso por RPE desactivado', 'info');
+  },
+
+  // --- Health (sleep / resting HR / steps) ---
+  showHealthModal() {
+    const key = Storage.todayKey();
+    const day = window.HealthLog.getDay(key) || {};
+    const last7 = window.HealthLog.getLast7();
+    const baseline = window.HealthLog.rhrBaseline();
+    const dayLetters = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+
+    const chips = last7.map(d => `
+      <div style="flex:1;text-align:center;padding:6px 2px;border-radius:8px;background:${d.key === key ? 'var(--color-accent-dim)' : 'var(--color-bg-input)'};min-width:0">
+        <div style="font-size:0.6rem;color:var(--color-text-tertiary)">${dayLetters[d.date.getDay()]}</div>
+        <div style="font-size:0.65rem;font-weight:700;white-space:nowrap;overflow:hidden">${d.sleep != null ? d.sleep + 'h' : '·'}</div>
+        <div style="font-size:0.6rem;color:${d.rhr > 0 && baseline && d.rhr >= baseline + 5 ? 'var(--color-warning)' : 'var(--color-text-secondary)'}">${d.rhr > 0 ? d.rhr : '--'}</div>
+      </div>`).join('');
+
+    Modal.show(`
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:0.75rem;color:var(--color-text-secondary)">Sueño última noche (h)</label>
+          <input id="hl-sleep" type="number" step="0.1" class="input" inputmode="decimal" value="${day.sleep ?? ''}" placeholder="7.5" style="width:100%;margin-top:4px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:0.75rem;color:var(--color-text-secondary)">FC reposo (lpm)</label>
+          <input id="hl-rhr" type="number" class="input" inputmode="numeric" value="${day.rhr ?? ''}" placeholder="58" style="width:100%;margin-top:4px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:0.75rem;color:var(--color-text-secondary)">Pasos</label>
+          <input id="hl-steps" type="number" class="input" inputmode="numeric" value="${day.steps ?? ''}" placeholder="8000" style="width:100%;margin-top:4px">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-bottom:14px" onclick="ProfileScreen.saveHealth()">Guardar hoy</button>
+
+      <div style="font-size:0.7rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Últimos 7 días · sueño / FC</div>
+      <div style="display:flex;gap:5px;margin-bottom:14px">${chips}</div>
+
+      <div style="font-size:0.7rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Google Fit / Health Connect</div>
+      <div style="background:var(--color-bg-input);border-radius:8px;padding:10px 12px;font-size:0.72rem;color:var(--color-text-secondary);line-height:1.55;margin-bottom:10px">
+        ${window.HealthLog.rhrBaseline() != null ? `Tu media de FC en reposo: <strong>${window.HealthLog.rhrBaseline()} lpm</strong>.<br>` : ''}
+        Desde el navegador no se puede leer Health Connect (es de Android) ni usar el API de Google Fit sin un servidor propio.
+        <strong>Hoy puedes:</strong> registrar a mano (arriba) o <strong>importar tu exportación de Google Takeout</strong> (Fit → Exportar datos).
+      </div>
+      <label class="btn btn-outline btn-block" style="cursor:pointer">
+        📂 Importar CSV (Google Takeout)
+        <input type="file" accept=".csv,text/csv" style="display:none" onchange="ProfileScreen.handleHealthCSV(event)">
+      </label>
+      <div style="font-size:0.62rem;color:var(--color-text-tertiary);margin-top:6px;text-align:center">Formatos de fecha: AAAA-MM-DD o MM/DD/AAAA · el CSV puede llevar sueño (7h 30m o minutos), FC y pasos.</div>
+
+      <button class="btn btn-secondary btn-block" style="margin-top:14px" onclick="Modal.hide()">Cerrar</button>
+    `, { title: '❤️ Salud' });
+  },
+
+  saveHealth() {
+    const sleepRaw = document.getElementById('hl-sleep')?.value;
+    const rhrRaw = document.getElementById('hl-rhr')?.value;
+    const stepsRaw = document.getElementById('hl-steps')?.value;
+    const data = {};
+    if (sleepRaw !== '' && sleepRaw != null) {
+      const v = Math.max(0, Math.min(24, parseFloat(sleepRaw.replace(',', '.')) || 0));
+      if (v > 0) data.sleep = v;
+    }
+    if (rhrRaw !== '' && rhrRaw != null) {
+      const v = parseInt(rhrRaw, 10);
+      if (v > 0 && v < 250) data.rhr = v;
+    }
+    if (stepsRaw !== '' && stepsRaw != null) {
+      const v = parseInt(stepsRaw, 10);
+      if (v >= 0) data.steps = v;
+    }
+    window.HealthLog.setDay(Storage.todayKey(), data);
+    Modal.hide();
+    Toast.show('❤️ Datos de salud guardados', 'success');
+    this.render();
+  },
+
+  async handleHealthCSV(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const count = window.HealthLog.importCSV(text);
+      if (count === 0) {
+        Toast.show('No se encontraron filas válidas (¿lleva columna de fecha?)', 'error', 4500);
+      } else {
+        Toast.show(`✅ ${count} días importados de ${file.name}`, 'success', 4000);
+        Modal.hide();
+        this.render();
+      }
+    } catch (e) {
+      Toast.show('No se pudo leer el archivo: ' + e.message, 'error');
+    }
   },
 
   adjustGoal(delta) {

@@ -29,6 +29,7 @@ export const WorkoutScreen = {
             <button class="btn btn-primary btn-lg" onclick="App.startEmptyWorkout()">Empezar Entrenamiento</button>
             <button class="btn btn-outline btn-lg" onclick="WorkoutScreen.startAMRAP()" style="display:flex;align-items:center;gap:6px">⏱️ AMRAP</button>
             <button class="btn btn-outline btn-lg" onclick="WorkoutScreen.startEMOM()" style="display:flex;align-items:center;gap:6px">⏲️ EMOM</button>
+            <button class="btn btn-outline btn-lg" onclick="AICoach.show1RMTestIntro()" style="display:flex;align-items:center;gap:6px">🧪 Test 1RM</button>
           </div>
         </div>`;
       return;
@@ -1206,6 +1207,11 @@ export const WorkoutScreen = {
       notes: this._workoutNote || ''
     };
     this._workoutNote = '';
+
+    // 1RM test: capture the previous estimate BEFORE this workout lands in history
+    const prev1RM = (workout.is1RMTest && typeof window.AICoach !== 'undefined' && window.AICoach.estimate1RM)
+      ? window.AICoach.estimate1RM((workout.exercises || [])[0]?.exerciseId)
+      : 0;
     
     // Check if we should ask to update the original routine
     const hadChanges = workout.routineId && this._hasRoutineChanges(workout);
@@ -1244,7 +1250,12 @@ export const WorkoutScreen = {
       this.lastRewards = window.Gamification.processWorkout(workout, 0);
     }
     
-    this.showSummaryModal(workout, hadChanges);
+    if (workout.is1RMTest && typeof window.AICoach !== 'undefined') {
+      // The test result modal replaces the generic summary
+      window.AICoach.show1RMTestResult(workout, prev1RM);
+    } else {
+      this.showSummaryModal(workout, hadChanges);
+    }
     if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
   },
 

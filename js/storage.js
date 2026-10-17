@@ -585,6 +585,47 @@ export const Storage = {
     });
     return vol;
   },
+
+  // =============================================
+  // Weekly plan (manual routine per weekday)
+  // =============================================
+  todayDayKey(d = new Date()) { return ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][d.getDay()]; },
+  getWeekPlan() { const u = this.getUser(); return u.weekPlan || {}; },
+  getWeekPlanDay(dayKey) { return this.getWeekPlan()[dayKey] || null; },
+  setWeekPlanDay(dayKey, routineId) {
+    const u = this.getUser();
+    if (!u.weekPlan) u.weekPlan = {};
+    u.weekPlan[dayKey] = routineId || null;
+    this.saveUser(u);
+    return u.weekPlan[dayKey];
+  },
+
+  // =============================================
+  // Nutrition (daily kcal + protein log)
+  // =============================================
+  todayKey(d = new Date()) { return this._localDateStr(d); },
+  getNutritionDay(dateKey) {
+    const user = this.getUser();
+    return (user.nutrition && user.nutrition[dateKey]) || null;
+  },
+  setNutritionDay(dateKey, data) {
+    const user = this.getUser();
+    if (!user.nutrition) user.nutrition = {};
+    // null clears the day; an object merges over what's already there
+    user.nutrition[dateKey] = data ? { ...(user.nutrition[dateKey] || {}), ...data } : null;
+    this.saveUser(user);
+    return user.nutrition[dateKey];
+  },
+  getNutritionGoals() {
+    const user = this.getUser();
+    return { kcal: 2200, protein: 140, ...(user.nutritionGoals || {}) };
+  },
+  setNutritionGoals(goals) {
+    const user = this.getUser();
+    user.nutritionGoals = { ...this.getNutritionGoals(), ...goals };
+    this.saveUser(user);
+    return user.nutritionGoals;
+  },
   _localDateStr(d) {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');

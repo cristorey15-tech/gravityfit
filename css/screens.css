@@ -123,6 +123,35 @@
   pointer-events: none;
 }
 
+/* --- Weekly Plan (drag routines onto days) --- */
+.plan-grid { display:flex; flex-direction:column; gap:6px; }
+.plan-day {
+  display:flex; align-items:center; gap:10px; padding:9px 12px;
+  background:var(--color-bg-card); border:1px solid var(--color-border);
+  border-radius:10px; transition:all var(--transition-fast); cursor:pointer;
+}
+.plan-day:hover { background:var(--color-bg-card-hover); }
+.plan-day.today { border-color:var(--color-accent); box-shadow:0 0 0 1px var(--color-accent-dim); }
+.plan-day.assignable { border-style:dashed; }
+.plan-day.over { border-color:var(--color-accent); background:rgba(167,139,250,0.12); transform:scale(1.015); }
+.plan-day-name { width:44px; font-size:0.7rem; font-weight:800; color:var(--color-text-secondary); text-transform:uppercase; flex-shrink:0; }
+.plan-day.today .plan-day-name { color:var(--color-accent); }
+.plan-day-routine { flex:1; font-size:0.8rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.plan-day-clear {
+  border:none; background:var(--color-bg-input); color:var(--color-text-tertiary);
+  width:22px; height:22px; border-radius:50%; font-size:0.65rem; cursor:pointer; flex-shrink:0;
+}
+.plan-day-clear:hover { background:rgba(239,68,68,0.15); color:var(--color-danger); }
+.plan-chips { display:flex; gap:8px; overflow-x:auto; padding:10px 2px 4px; scrollbar-width:thin; }
+.plan-chip {
+  flex-shrink:0; padding:7px 14px; border-radius:20px; font-size:0.75rem; font-weight:600;
+  background:var(--color-bg-card); border:1px solid var(--color-border); cursor:grab;
+  user-select:none; -webkit-user-select:none; touch-action:none; transition:all var(--transition-fast);
+}
+.plan-chip:hover { border-color:var(--color-accent); }
+.plan-chip.selected { background:var(--color-accent-dim); border-color:var(--color-accent); color:var(--color-accent); }
+.plan-chip:active { cursor:grabbing; }
+
 /* --- Routines Screen --- */
 .routine-card {
   background:var(--color-bg-card); border:1px solid var(--color-border);

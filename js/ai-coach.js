@@ -3,6 +3,7 @@
 // ============================================
 
 import { Storage } from './storage.js';
+import { HealthLog } from './health.js';
 import { Modal, Toast, escapeHtml } from './components.js';
 import { App } from './app.js';
 
@@ -128,7 +129,8 @@ export const AICoach = {
     history.forEach(h => {
       h.sets.forEach(s => {
         if (s.weight && s.reps) {
-          const epley1RM = s.weight * (1 + s.reps / 30);
+          // Epley; a clean single is the max itself (formula overestimates at 1 rep)
+          const epley1RM = s.reps === 1 ? s.weight : s.weight * (1 + s.reps / 30);
           if (epley1RM > best1RM) best1RM = epley1RM;
         }
       });
@@ -149,7 +151,19 @@ export const AICoach = {
       return this.generateDeloadWorkout();
     }
 
-    // a. Verificar si hay un programa activo que dicte qué toca hoy
+    // a. Prioridad: el plan semanal manual del usuario para hoy
+    if (typeof Storage.getWeekPlanDay === 'function') {
+      const planId = Storage.getWeekPlanDay(Storage.todayDayKey());
+      if (planId && planId !== 'rest') {
+        const planned = typeof Storage.getRoutine === 'function' ? Storage.getRoutine(planId) : null;
+        if (planned && planned.exercises && planned.exercises.length) {
+          routineName = `📅 Plan semanal: ${planned.name}`;
+          return this._buildWorkoutFromTemplate(routineName, planned.exercises);
+        }
+      }
+    }
+
+    // b. Verificar si hay un programa activo que dicte qué toca hoy
     const program = Storage.getActiveProgram();
     const nextWorkout = program ? Storage.getNextProgramWorkout(program) : null;
 
@@ -159,7 +173,7 @@ export const AICoach = {
       return this._buildWorkoutFromTemplate(routineName, nextWorkout.routine.exercises);
     }
 
-    // b. Si no hay programa, armar uno basado en músculos MENOS fatigados
+    // c. Si no hay programa, armar uno basado en músculos MENOS fatigados
     const allMuscles = ['Pecho', 'Espalda', 'Hombros', 'Cuádriceps', 'Femorales', 'Tríceps', 'Bíceps', 'Glúteos'];
     const restedMuscles = allMuscles
       .map(m => ({ muscle: m, fatigue: fatigue[m] || 0 }))
@@ -623,9 +637,252 @@ export const AICoach = {
       }
     }
 
+    // 6b) Recovery signals from health data (sleep + resting HR)
+    try {
+      const hKey = (typeof Storage.todayKey === 'function') ? Storage.todayKey() : null;
+      const h = hKey ? HealthLog.getDay(hKey) : null;
+      if (h && h.sleep > 0 && h.sleep < 6) {
+        insights.push({
+          icon: '😴', severity: 'warn', title: 'Dormiste poco',
+          detail: `${h.sleep} h de sueño. Hoy controla la técnica y no fuerces series al fallo: dormir mal multiplica la fatiga.`,
+        });
+      } else if (h && h.sleep >= 8) {
+        insights.push({
+          icon: '😴', severity: 'good', title: 'Sueño de sobra',
+          detail: `${h.sleep} h descansando — mejor momento para atacar cargas altas.`,
+        });
+      }
+      const baseline = HealthLog.rhrBaseline();
+      if (h && h.rhr > 0 && baseline && h.rhr >= baseline + 5) {
+        insights.push({
+          icon: '💓', severity: 'warn', title: 'FC en reposo elevada',
+          detail: `${h.rhr} lpm frente a tu media de ${baseline}. Señal de fatiga o estrés: si puedes, baja la intensidad hoy.`,
+        });
+      }
+    } catch { /* health es best-effort */ }
+
+    // 7) Nutrition — protein is what muscle repair actually needs
+    try {
+      const key = (typeof Storage.todayKey === 'function') ? Storage.todayKey() : null;
+      const nd = key ? Storage.getNutritionDay(key) : null;
+      const goals = Storage.getNutritionGoals();
+      if (nd && (nd.kcal || nd.protein)) {
+        if (goals.protein > 0 && nd.protein >= goals.protein * 0.9) {
+          insights.push({
+            icon: '🥩', severity: 'good', title: 'Proteína completada',
+            detail: `${nd.protein} g de ${goals.protein} g — lo necesario para reparar y crecer.`,
+          });
+        } else if (goals.protein > 0 && nd.protein > 0 && nd.protein < goals.protein * 0.5) {
+          insights.push({
+            icon: '🥗', severity: 'info', title: 'Poca proteína hoy',
+            detail: `Llevas ${nd.protein} g de ${goals.protein} g. Para tu volumen, apunta a acercarte antes de dormir.`,
+          });
+        }
+      }
+    } catch { /* nutrition es best-effort */ }
+
     const order = { alert: 0, warn: 1, good: 2, info: 3 };
     insights.sort((a, b) => (order[a.severity] ?? 4) - (order[b.severity] ?? 4));
     return insights;
+  },
+
+  // =============================================
+  // 2. Test de 1RM guiado (estimación con Epley)
+  // =============================================
+  show1RMTestIntro() {
+    Modal.show(`
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-size:3rem;margin-bottom:8px">🧪</div>
+        <p style="font-size:0.875rem;color:var(--color-text-secondary);line-height:1.6;text-align:left">
+          El <strong>1RM</strong> (one-repetition max) es el <strong>mayor peso que puedes levantar una sola vez</strong> con buena técnica. No hace falta que lo levantes: lo <em>estimamos</em> con series crecientes y la fórmula de <strong>Epley</strong> (peso × (1 + reps/30)).
+        </p>
+      </div>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">¿Para qué sirve?</div>
+      <ul style="font-size:0.8125rem;line-height:1.6;padding-left:18px;color:var(--color-text-secondary)">
+        <li><strong>Medir tu fuerza real</strong>: es el número que sube (o no) cuando todo lo demás se mantiene igual.</li>
+        <li><strong>Calibrar este coach</strong>: todos los pesos que sugiero salen de tus % de 1RM — cuanto más preciso, mejor el consejo.</li>
+        <li><strong>Ver progreso honesto</strong>: comparar tu 1RM de hoy con el de hace 8 semanas dice más que la báscula.</li>
+        <li><strong>Programar con %</strong>: sabrás qué pesa el 80% o el 90% de tu máximo sin calculos.</li>
+      </ul>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 6px">Cómo funciona el test</div>
+      <ol style="font-size:0.8125rem;line-height:1.6;padding-left:18px;color:var(--color-text-secondary);margin-bottom:8px">
+        <li>Calentamiento progresivo (50%, 70%, 80%…).</li>
+        <li>Series de trabajo al 90%, 95% y tu intento máximo.</li>
+        <li>Registrar peso y reps al fallar → estimo tu 1RM.</li>
+        <li>Al finalizar verás tu máximo y los pesos que usaré a partir de ahora.</li>
+      </ol>
+      <div style="background:rgba(239,68,68,0.08);border-left:3px solid var(--color-danger);padding:8px 10px;border-radius:4px;font-size:0.75rem;color:var(--color-text-secondary);margin-bottom:14px">
+        ⚠️ <strong>Seguridad:</strong> hazlo con máscara/seguridad o en máquina guiada, nunca solo con barra cargada al fallo. Cada 4–8 semanas es suficiente; si eres principiante, estima con series submáximas.
+      </div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.8125rem;font-weight:600;display:block;margin-bottom:4px">Ejercicio</label>
+        <input id="rm-test-ex" class="input" placeholder="Busca el ejercicio… (ej. Press banca)" autocomplete="off" oninput="AICoach.filterExerciseOptions(this.value)">
+        <datalist id="rm-test-ex-list"></datalist>
+        <div style="font-size:0.65rem;color:var(--color-text-tertiary);margin-top:4px">Prueba en: barra, mancuernas o máquina — el que quieras medir.</div>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary flex-1" onclick="Modal.hide()">Cancelar</button>
+        <button class="btn btn-primary flex-1" onclick="AICoach.start1RMTest()">🚀 Empezar test</button>
+      </div>
+    `, { title: 'Test de 1RM — mide tu fuerza' });
+    setTimeout(() => this.filterExerciseOptions(''), 50);
+  },
+
+  // Options for the test's exercise datalist. Empty query → exercises with history first.
+  filterExerciseOptions(q) {
+    const list = document.getElementById('rm-test-ex-list');
+    if (!list) return '';
+    const norm = (t) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const all = Storage.getAllExercises();
+    const query = norm(q || '').trim();
+    let matches;
+    if (query) {
+      matches = all.filter(e => norm(e.name).includes(query)).slice(0, 30);
+    } else {
+      // Prefer exercises the user has actually trained
+      const trained = [];
+      const seen = {};
+      Storage.getWorkouts().forEach(w => (w.exercises || []).forEach(ex => {
+        if (!seen[ex.exerciseId]) {
+          seen[ex.exerciseId] = true;
+          const d = Storage.getExercise(ex.exerciseId);
+          if (d) trained.push(d);
+        }
+      }));
+      matches = [...trained, ...all.filter(e => !seen[e.id])].slice(0, 30);
+    }
+    list.innerHTML = matches.map(e => `<option value="${escapeHtml(e.name)}">`).join('');
+    return list.innerHTML;
+  },
+
+  start1RMTest(nameOrId) {
+    const raw = nameOrId !== undefined && nameOrId !== null
+      ? String(nameOrId)
+      : (document.getElementById('rm-test-ex')?.value || '').trim();
+    if (!raw) {
+      Toast.show('Elige el ejercicio del test', 'warning');
+      return;
+    }
+    const norm = (t) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const exercise = Storage.getAllExercises().find(e => e.id === raw || norm(e.name) === norm(raw));
+    if (!exercise) {
+      Toast.show('Ejercicio no encontrado — escríbelo o selecciónalo de la lista', 'error');
+      return;
+    }
+
+    const user = Storage.getUser();
+    const e1RM = this.estimate1RM(exercise.id);
+    const history = Storage.getExerciseHistory(exercise.id, 6);
+    const bestWeight = history.length ? Math.max(...history.map(h => h.maxWeight || 0)) : 0;
+    const round = (w) => Math.round(w / 2.5) * 2.5;
+
+    // Ramp: warm-ups, then work sets toward the current max, then the top attempt.
+    let sets;
+    if (e1RM > 0) {
+      sets = [
+        { weight: round(e1RM * 0.5),  reps: 5, type: 'warmup', completed: false },
+        { weight: round(e1RM * 0.7),  reps: 3, type: 'warmup', completed: false },
+        { weight: round(e1RM * 0.8),  reps: 2, type: 'normal', completed: false },
+        { weight: round(e1RM * 0.9),  reps: 1, type: 'normal', completed: false },
+        { weight: round(e1RM * 0.95), reps: 1, type: 'normal', completed: false },
+        { weight: round(e1RM),        reps: 1, type: 'normal', completed: false },
+      ];
+    } else if (bestWeight > 0) {
+      // No reliable 1RM yet: build a ramp on top of the best weight lifted
+      const top = round(bestWeight * 1.1);
+      sets = [
+        { weight: round(top * 0.5),  reps: 5, type: 'warmup', completed: false },
+        { weight: round(top * 0.7),  reps: 3, type: 'warmup', completed: false },
+        { weight: round(top * 0.85), reps: 2, type: 'normal', completed: false },
+        { weight: round(top * 0.95), reps: 1, type: 'normal', completed: false },
+        { weight: top,               reps: 1, type: 'normal', completed: false },
+      ];
+    } else {
+      // Brand new exercise: generic ascending ramp, weights filled in by the user
+      sets = [10, 8, 5, 3, 2, 1].map(reps => ({ weight: null, reps, type: reps >= 8 ? 'warmup' : 'normal', completed: false }));
+    }
+
+    window.WorkoutScreen.activeWorkout = {
+      name: `🧪 Test 1RM: ${exercise.name}`,
+      routineId: null,
+      is1RMTest: true,
+      exercises: [{ exerciseId: exercise.id, unit: user.units, timeMode: false, sets }],
+      startedAt: new Date().toISOString(),
+    };
+    window.WorkoutScreen.startTime = Date.now();
+    window.WorkoutScreen.saveNow();
+    window.WorkoutScreen.requestWakeLock();
+    window.WorkoutScreen.startAutoSave();
+    window.WorkoutScreen._attachBeforeUnload();
+    Modal.hide();
+    window.App.navigate('workout');
+    Toast.show('🧪 Test iniciado — calienta bien y no falles en las primeras series', 'info', 4000);
+  },
+
+  // Best Epley estimate from a finished test workout (a clean single = the weight itself).
+  estimate1RMFromWorkout(workout) {
+    const ex = ((workout && workout.exercises) || [])[0];
+    if (!ex) return { est: 0, set: null };
+    let best = 0, bestSet = null;
+    (ex.sets || []).forEach(s => {
+      if (!s.completed || !(s.weight > 0) || !(s.reps > 0)) return;
+      const est = s.reps === 1 ? s.weight : s.weight * (1 + s.reps / 30);
+      if (est > best) { best = est; bestSet = s; }
+    });
+    return { est: best, set: bestSet };
+  },
+
+  show1RMTestResult(workout, prevEstimate = 0) {
+    const ex = ((workout && workout.exercises) || [])[0];
+    if (!ex) return;
+    const exData = Storage.getExercise(ex.exerciseId);
+    const name = exData ? exData.name : 'este ejercicio';
+    const unit = ex.unit || Storage.getUser().units || 'kg';
+    const { est, set } = this.estimate1RMFromWorkout(workout);
+
+    if (!est) {
+      Modal.show(`
+        <p style="font-size:0.875rem;color:var(--color-text-secondary);line-height:1.6">
+          No pude estimar tu 1RM porque no hay series completadas con peso y reps.<br><br>
+          La próxima vez asegúrate de registrar el peso y las reps de cada intento. El test se guardó igualmente en tu historial.
+        </p>
+        <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="Modal.hide()">Entendido</button>
+      `, { title: '🧪 Test finalizado', center: true });
+      return;
+    }
+
+    const round = (w) => Math.round(w / 2.5) * 2.5;
+    const percents = [95, 90, 85, 80, 75];
+    const tableRows = percents.map(p => `
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:0.8125rem;border-bottom:1px solid var(--color-border)">
+        <span style="color:var(--color-text-secondary)">${p}% de 1RM</span>
+        <strong>${round(est * p / 100)} ${unit}</strong>
+      </div>`).join('');
+    const delta = prevEstimate > 0 ? est - prevEstimate : null;
+    const deltaHtml = delta != null
+      ? `<div style="font-size:0.8125rem;color:${delta >= 0 ? 'var(--color-success)' : 'var(--color-danger)'};margin-top:4px">
+          ${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)} ${unit} vs. tu estimación anterior (${prevEstimate.toFixed(1)} ${unit})
+         </div>`
+      : '';
+
+    Modal.show(`
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-size:3rem;margin-bottom:4px">🏆</div>
+        <div style="font-size:0.8125rem;color:var(--color-text-secondary)">Tu 1RM estimado en</div>
+        <div style="font-size:0.9375rem;font-weight:700">${escapeHtml(name)}</div>
+        <div style="font-size:2.5rem;font-weight:800;color:var(--color-accent);line-height:1.2">${round(est)} <span style="font-size:1.25rem">${unit}</span></div>
+        ${deltaHtml}
+        ${set ? `<div style="font-size:0.7rem;color:var(--color-text-tertiary)">basado en ${set.weight}${unit} × ${set.reps} reps (Epley)</div>` : ''}
+      </div>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Tus pesos de entrenamiento</div>
+      ${tableRows}
+      <p style="font-size:0.75rem;color:var(--color-text-tertiary);margin-top:10px;line-height:1.5">
+        A partir de ahora usaré este máximo para calcular tus pesos sugeridos. Repite el test cada 4–8 semanas.
+      </p>
+      <button class="btn btn-primary btn-block" style="margin-top:10px" onclick="Modal.hide()">¡Perfecto!</button>
+    `, { title: '🧪 Resultado del test de 1RM' });
   },
 
   // Inyectar Rutina en la UI
