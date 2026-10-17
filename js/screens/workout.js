@@ -829,6 +829,18 @@ export const WorkoutScreen = {
     setTimeout(() => prompt.classList.add('active'), 10);
   },
 
+  // --- Adaptive rest: the chosen RPE decides how long you should recover ---
+  // base is the user's default rest timer. Returns seconds, rounded to 15s.
+  restSecondsForRPE(rpe, base = 90) {
+    const v = Number(rpe);
+    const b = Math.max(30, Number(base) || 90);
+    const round15 = (s) => Math.max(30, Math.round(s / 15) * 15);
+    if (v >= 9) return Math.max(b, 180);      // near failure → 3 min or more
+    if (v >= 8) return b;                     // target zone → your usual rest
+    if (v >= 7) return round15(b * 0.75);     // margin → recover a bit faster
+    return round15(b * 0.5);                  // very easy → half the rest
+  },
+
   setRPESet(exIdx, setIdx, rpe) {
     const set = this.activeWorkout.exercises[exIdx].sets[setIdx];
     set.rpe = rpe;
@@ -840,13 +852,28 @@ export const WorkoutScreen = {
     }
     if (navigator.vibrate) navigator.vibrate(5);
 
-    // Live coaching feedback on the chosen RPE
+    // Adaptive rest: retune the running rest timer to the chosen RPE
+    let restMsg = '';
+    const user = Storage.getUser();
+    if (user.adaptiveRest !== false && RestTimer.endTime > 0) {
+      const target = this.restSecondsForRPE(rpe, user.defaultRestTimer || 90);
+      const delta = target - RestTimer.getRemaining();
+      if (Math.abs(delta) >= 10) {
+        RestTimer.adjust(delta);
+        restMsg = ` Descanso: ${this.formatTime(target)}.`;
+      }
+    }
+
+    // Live coaching feedback on the chosen RPE (+ new rest duration, if any)
+    let msg = restMsg;
+    let tone = 'info';
     if (typeof window.AICoach !== 'undefined') {
       try {
         const fb = window.AICoach.getRPEFeedback(rpe);
-        if (fb) Toast.show(fb.message, fb.tone, 3500);
+        if (fb) { msg = fb.message + restMsg; tone = fb.tone; }
       } catch { /* feedback es best-effort */ }
     }
+    if (msg) Toast.show(msg, tone, 3500);
   },
 
   // --- FEATURE E: Next Exercise Info for RestTimer ---

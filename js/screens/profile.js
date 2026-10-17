@@ -197,6 +197,16 @@ export const ProfileScreen = {
               <button class="btn btn-ghost btn-sm" onclick="ProfileScreen.adjustTimer(15)">+</button>
             </div>
           </div>
+          <div class="settings-item" onclick="ProfileScreen.toggleAdaptiveRest()">
+            <div class="settings-item-left">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              <div>
+                <span class="settings-item-label">Descanso por RPE</span>
+                <div style="font-size:0.65rem;color:var(--color-text-tertiary)">Ajusta el timer al esfuerzo de cada serie</div>
+              </div>
+            </div>
+            <div class="toggle ${user.adaptiveRest !== false ? 'active' : ''}"></div>
+          </div>
           <div class="settings-item" style="cursor:default">
             <div class="settings-item-left">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -395,6 +405,14 @@ export const ProfileScreen = {
     Storage.saveUser(user);
     const el = document.getElementById('timer-value');
     if (el) el.textContent = user.defaultRestTimer + 's';
+  },
+
+  toggleAdaptiveRest() {
+    const user = Storage.getUser();
+    user.adaptiveRest = user.adaptiveRest === false; // default: on
+    Storage.saveUser(user);
+    this.render();
+    Toast.show(user.adaptiveRest ? '⚡ Descanso por RPE activado' : 'Descanso por RPE desactivado', 'info');
   },
 
   adjustGoal(delta) {
